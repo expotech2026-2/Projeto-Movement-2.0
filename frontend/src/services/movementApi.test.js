@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearSession, getSessionToken, login, request } from "./movementApi";
+import {
+  catalog,
+  clearSession,
+  fetchReport,
+  getSessionToken,
+  login,
+  request,
+} from "./movementApi";
 import { apiConfig } from "../config/api";
 
 describe("API Movement", () => {
@@ -20,11 +27,18 @@ describe("API Movement", () => {
 
   it("armazena a sessão e envia autorização nas próximas requisições", async () => {
     fetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ access_token: "test-session" }), {
-        status: 200,
-      }),
+      new Response(
+        JSON.stringify({
+          access_token: "test-session",
+          user: { username: "admin", role: "admin" },
+        }),
+        { status: 200 },
+      ),
     );
-    await login("admin", "test-password");
+    await expect(login("admin", "test-password")).resolves.toEqual({
+      username: "admin",
+      role: "admin",
+    });
     expect(getSessionToken()).toBe("test-session");
     fetch.mockResolvedValueOnce(new Response("[]", { status: 200 }));
     await request("/rooms");
@@ -83,5 +97,42 @@ describe("API Movement", () => {
       ),
     );
     await expect(request("/rooms")).rejects.toThrow("Confira os campos");
+  });
+
+  it("baixa o relatório PDF com a sessão e o nome enviado pela API", async () => {
+    storage.set("movement.operator.session", "valid-token");
+    fetch.mockResolvedValue(
+      new Response(new Blob(["%PDF-1.4"]), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition":
+            'attachment; filename="movement-relatorio-20261104-1130.pdf"',
+        },
+      }),
+    );
+    const report = await fetchReport({ unit_id: "unidade-1", room_id: "" });
+    expect(report.filename).toBe("movement-relatorio-20261104-1130.pdf");
+    expect(await report.blob.text()).toBe("%PDF-1.4");
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/reports/pdf?unit_id=unidade-1`,
+      expect.objectContaining({
+        headers: { Authorization: "Bearer valid-token" },
+      }),
+    );
+  });
+
+  it("reaproveita consultas ao catálogo e repete após falha", async () => {
+    fetch
+      .mockResolvedValueOnce(new Response("{}", { status: 500 }))
+      .mockResolvedValueOnce(new Response('[{"brand":"LG"}]', { status: 200 }));
+    await expect(catalog("/catalog/brands")).rejects.toThrow("HTTP 500");
+    await expect(catalog("/catalog/brands")).resolves.toEqual([
+      { brand: "LG" },
+    ]);
+    await expect(catalog("/catalog/brands")).resolves.toEqual([
+      { brand: "LG" },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

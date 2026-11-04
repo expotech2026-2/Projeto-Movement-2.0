@@ -15,6 +15,7 @@ from psycopg import sql
 from sqlalchemy.engine import URL
 
 from app.database import build_session_factory
+from app.management import default_unit
 from app.models import Device, Room
 from app.security import hash_device_token, hash_password
 from app.settings import Settings
@@ -196,7 +197,7 @@ def provision_application(instance: dict) -> None:
     try:
         with sessions() as session:
             if session.get(Room, "sala-01") is None:
-                session.add(Room(id="sala-01", name="Sala 01"))
+                session.add(Room(id="sala-01", name="Sala 01", unit_id=default_unit(session).id))
                 session.flush()
             device = session.get(Device, "esp32-01")
             if device is None:

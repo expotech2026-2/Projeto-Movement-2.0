@@ -4,8 +4,8 @@
   "description": "Salas, aparelhos e histórico de climatização",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f8f7",
-  "theme_color": "#168672",
+  "background_color": "#0a0e15",
+  "theme_color": "#0a0e15",
   "icons": [
     {
       "src": "/favicon.svg",

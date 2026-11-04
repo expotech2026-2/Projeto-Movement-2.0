@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
@@ -9,10 +10,27 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class CurrentUserResponse(BaseModel):
+    username: str
+    full_name: str
+    role: Literal["admin", "professor"]
+    builtin: bool
+
+    @classmethod
+    def of(cls, principal) -> "CurrentUserResponse":
+        return cls(
+            username=principal.username,
+            full_name=principal.full_name,
+            role=principal.role,
+            builtin=principal.builtin,
+        )
+
+
 class SessionResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    user: CurrentUserResponse
 
 
 class TelemetryInput(BaseModel):

@@ -4,10 +4,13 @@ Gestão de salas e aparelhos de ar-condicionado, baseada no Projeto Integrador e
 
 ## Funcionalidades
 
-- Login e saída do operador, com sessão assinada e expiração.
-- Cadastro, busca, seleção, edição e exclusão de salas vazias.
+- Login com dois perfis: Administrador e Professor, com sessão assinada e expiração.
+- Unidades (por exemplo, Centro e Polo Sede), cada uma com suas salas.
+- Cadastro, busca, seleção, edição e exclusão de unidades e salas vazias.
 - Vários aparelhos por sala: Split, Janela, Cassete, Piso-teto, Portátil e VRF/VRV.
-- Nome, marca, modelo, capacidade em BTU/h, inverter e situação de cada aparelho.
+- Catálogo do Inmetro com marcas e modelos registrados no Brasil; o modelo escolhido preenche tipo, BTU/h e inverter.
+- Relatório em PDF de todas as unidades, de uma unidade ou de uma sala.
+- Tema escuro com a logo do projeto e opção de tema claro.
 - Cadastro autenticado de dispositivo ESP32 por sala, com token exibido uma única vez.
 - Telemetria por dispositivo, sem aceitar uma sala informada pelo cliente.
 - Painel com temperatura, umidade, ocupação, inventário e gráfico por período.
@@ -15,6 +18,32 @@ Gestão de salas e aparelhos de ar-condicionado, baseada no Projeto Integrador e
 - Migrações, autenticação, validação, CORS restrito e proteção de salas com dados vinculados.
 
 O status do inventário indica a situação cadastral do equipamento. O estado ligado/desligado vem da telemetria do sensor da sala. Esta versão não envia comandos físicos de ligar/desligar pelo site.
+
+## Unidades, perfis e catálogo
+
+As salas pertencem a uma unidade: `Centro → Sala 101, Sala 102…`, `Polo Sede → Auditório…`. Uma unidade só pode ser excluída depois que suas salas forem movidas ou excluídas. Na migração de uma base existente, cada localização já informada nas salas vira uma unidade, e as salas sem localização vão para a "Unidade principal".
+
+| Ação | Administrador | Professor |
+| --- | --- | --- |
+| Consultar unidades, salas, aparelhos, leituras e histórico | Sim | Sim |
+| Gerar relatórios em PDF | Sim | Sim |
+| Cadastrar, editar e excluir unidades, salas e aparelhos | Sim | Não |
+| Cadastrar sensores ESP32 | Sim | Não |
+| Gerenciar usuários | Sim | Não |
+
+O login definido em `backend/.env` (`MOVEMENT_OPERATOR_USERNAME`) continua sendo o administrador principal. Os demais administradores e professores são cadastrados na tela Usuários, com senha de pelo menos 12 caracteres. Desativar um usuário ou trocar a senha dele encerra as sessões abertas.
+
+O catálogo vem da tabela de eficiência energética de condicionadores de ar do Programa Brasileiro de Etiquetagem (Inmetro), atualizada em 31/12/2025: 1.507 modelos de 52 marcas, com tipo, BTU/h, tecnologia, classe e número de registro. Ele fica em `backend/app/data/inmetro_condicionadores.csv` e é carregado pela migração. Portáteis e VRF/VRV não constam dessa tabela e são preenchidos manualmente. Em quatro modelos, a capacidade publicada estava sem os milhares ou trocada com a coluna em watts e foi corrigida; esses casos têm `corrected=1` no CSV.
+
+Para atualizar o catálogo com uma nova tabela do Inmetro, baixe o PDF de 28 colunas e, na pasta `backend`, execute:
+
+```powershell
+..\.venv\Scripts\python.exe -m pip install pdfplumber
+..\.venv\Scripts\python.exe scripts\inmetro_catalog.py TABELA.pdf app\data\inmetro_condicionadores.csv
+..\.venv\Scripts\python.exe -m app.cli catalog-import
+```
+
+O `pdfplumber` é usado apenas por esse conversor e não faz parte do `requirements.lock`. O relatório PDF usa o `reportlab`, incluído no `requirements.lock`.
 
 ## Organização
 
