@@ -108,7 +108,39 @@ Para executar a API local com o banco do Supabase, na pasta `backend`:
 ..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --env-file .env.supabase --host 127.0.0.1 --port 8000
 ```
 
-As variáveis do arquivo informado têm prioridade sobre `backend/.env`. No serviço que hospedar a API, cadastre os mesmos valores de `backend/.env.supabase` como variáveis secretas e ajuste `MOVEMENT_CORS_ORIGINS` para o domínio publicado. O painel de segurança do Supabase (Advisors) não aponta alertas para esta configuração.
+As variáveis do arquivo informado têm prioridade sobre `backend/.env`. Em produção, os mesmos valores vão para as variáveis de ambiente do Azure (veja a próxima seção). O painel de segurança do Supabase (Advisors) não aponta alertas para esta configuração.
+
+## Deploy no Azure
+
+A produção roda no Azure App Service (Linux, contêiner), com a imagem publicada no Azure Container Registry. O `Dockerfile` da raiz gera um único contêiner: `app.site:create_site` serve o site em `/` e a API em `/api`, o mesmo caminho usado pelo proxy do Vite. Ao iniciar, o contêiner aplica as migrações pendentes no Supabase.
+
+O trabalho é feito em branches `feat/<número>-<descrição>` ou `fix/<número>-<descrição>`, entra na `Devlop` por pull request para teste e só depois segue para a `main`. Em todas as branches a pipeline executa lint, testes, build do frontend e build da imagem. Somente um push na `main` publica `movement:latest` no registro, e o App Service se atualiza com essa imagem.
+
+Configuração inicial, feita uma única vez:
+
+1. Ative a assinatura Azure for Students em <https://azure.microsoft.com/free/students> com o e-mail da faculdade.
+2. No portal, crie um **Container Registry**, plano Basic, num grupo de recursos `movement`. Prefira a região West US 2, próxima do Supabase; se a assinatura não a permitir, use uma das regiões liberadas. Em Settings > Access keys, habilite **Admin user**.
+3. Cadastre no GitHub o endereço do registro e as credenciais do Admin user. Os valores dos segredos são solicitados no terminal:
+
+```powershell
+gh variable set ACR_LOGIN_SERVER --repo expotech2026-2/Projeto-Movement-2.0 --body NOME-DO-REGISTRO.azurecr.io
+gh secret set ACR_USERNAME --repo expotech2026-2/Projeto-Movement-2.0
+gh secret set ACR_PASSWORD --repo expotech2026-2/Projeto-Movement-2.0
+```
+
+4. Faça o merge da `Devlop` na `main`, ou execute de novo a pipeline da `main`, para publicar a primeira imagem.
+5. Crie um **Web App**: Publish **Container**, sistema **Linux**, mesma região do registro, plano Free F1 se estiver disponível para contêiner, ou Basic B1. Na aba Container, escolha Azure Container Registry, o registro, a imagem `movement` e a tag `latest`.
+6. Na pasta `backend`, gere as variáveis de ambiente a partir de `backend/.env.supabase`:
+
+```powershell
+..\.venv\Scripts\python.exe scripts\azure_settings.py https://NOME-DO-APP.azurewebsites.net
+```
+
+7. Copie o conteúdo de `backend/.env.azure.json` (fora do Git) para Web App > Settings > Environment variables > Advanced edit e aplique. O arquivo inclui `WEBSITES_PORT=8000` e limita o CORS ao endereço publicado.
+8. Em Deployment Center, ative **Continuous deployment**, para que cada nova imagem `latest` reinicie o app. Em Monitoring > Health check, informe `/api/health`.
+9. Confira `https://NOME-DO-APP.azurewebsites.net/api/ready`. A documentação interativa fica em `/api/docs`.
+
+O registro Basic e o plano B1 consomem os créditos da assinatura de estudante; o plano F1 não tem custo, mas hiberna sem uso e limita o tempo de CPU diário. No firmware, use `https://NOME-DO-APP.azurewebsites.net/api/telemetry` em `MOVEMENT_API_URL` e o certificado raiz do domínio em `MOVEMENT_CA_CERT`.
 
 ## Desenvolvimento local separado
 
@@ -143,7 +175,7 @@ Alternativamente, execute a API em um terminal na pasta `backend` e o frontend e
 npm.cmd run dev
 ```
 
-O frontend usa `/api` e o proxy do Vite durante o desenvolvimento. Em produção, configure um proxy reverso que encaminhe `/api` ao FastAPI, removendo esse prefixo; sirva `frontend/dist` como arquivos estáticos e use HTTPS. `vite preview` apenas serve o build e não substitui esse proxy.
+O frontend usa `/api` e o proxy do Vite durante o desenvolvimento. Em produção, o contêiner descrito em "Deploy no Azure" serve o build e a API no mesmo endereço, com HTTPS fornecido pelo App Service. `vite preview` apenas serve o build e não substitui esse proxy.
 
 ## Regras de retenção
 
