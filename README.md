@@ -1,0 +1,153 @@
+# Movement 2.0
+
+Gestão de salas e aparelhos de ar-condicionado, baseada no Projeto Integrador entregue. Frontend React separado da API FastAPI; PostgreSQL como banco de dados e pgAdmin 4 para administração.
+
+## Funcionalidades
+
+- Login e saída do operador, com sessão assinada e expiração.
+- Cadastro, busca, seleção, edição e exclusão de salas vazias.
+- Vários aparelhos por sala: Split, Janela, Cassete, Piso-teto, Portátil e VRF/VRV.
+- Nome, marca, modelo, capacidade em BTU/h, inverter e situação de cada aparelho.
+- Cadastro autenticado de dispositivo ESP32 por sala, com token exibido uma única vez.
+- Telemetria por dispositivo, sem aceitar uma sala informada pelo cliente.
+- Painel com temperatura, umidade, ocupação, inventário e gráfico por período.
+- Histórico mensal por sala e exportação CSV; atualização automática a cada 15 segundos.
+- Migrações, autenticação, validação, CORS restrito e proteção de salas com dados vinculados.
+
+O status do inventário indica a situação cadastral do equipamento. O estado ligado/desligado vem da telemetria do sensor da sala. Esta versão não envia comandos físicos de ligar/desligar pelo site.
+
+## Organização
+
+```text
+frontend/             React, Vite, componentes, estilos e cliente HTTP
+backend/app/          FastAPI, modelos, serviços e retenção
+backend/migrations/   Migrações Alembic
+backend/tests/        Testes com PostgreSQL separado
+database/             Consultas e importação de servidores no pgAdmin
+firmware/             ESP32 do projeto original com envio para FastAPI
+scripts/              Inicialização e encerramento no Windows
+```
+
+Comentários do código são limitados a uma linha. Credenciais, bancos locais, configurações privadas e dependências instaladas ficam fora do Git.
+
+## Preparar o ambiente
+
+Requisitos: Python 3.12+, Node.js 22.12+ (testado com Node 24), PostgreSQL e pgAdmin 4. Os comandos abaixo são para PowerShell, na raiz do projeto.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock
+.\.venv\Scripts\python.exe -m pip install --no-deps -e backend
+npm.cmd ci --prefix frontend
+```
+
+Se usar `uv`, substitua a criação por `uv venv --python 3.12 .venv` e a instalação por `uv pip install --python .venv\Scripts\python.exe -r backend\requirements.lock`, seguida de `uv pip install --python .venv\Scripts\python.exe --no-deps -e backend`.
+
+## Conectar ao banco Movement existente
+
+Configuração informada: PostgreSQL em `127.0.0.1:5432`, usuário `postgres`, banco `Movement`. “Movement” no painel Servers do pgAdmin é um nome de cadastro; o endereço real deve estar na aba Connection das propriedades do servidor.
+
+```powershell
+.\.venv\Scripts\python.exe -m app.configure_existing
+```
+
+O comando solicita a senha sem exibi-la, verifica a conexão, cria o schema `movement` dentro do banco existente e aplica as migrações em uma transação. Tabelas de outros schemas são preservadas. Em caso de falha de conexão ou migração, `backend/.env` é preservado. Se já houver tabelas sem controle Alembic no schema `movement`, a configuração para sem alterá-las.
+
+Após sucesso, o comando configura `backend/.env` e guarda a configuração anterior em um backup privado. Se houver login local já configurado, ele será mantido; caso contrário, o comando solicita a criação da senha do operador. Para outro endereço, use `--host ENDERECO`; porta, usuário e banco também podem ser informados.
+
+No pgAdmin: `Servers > Movement > Databases > Movement > Schemas > movement > Tables`. Atualize a árvore depois da migração. As tabelas são `rooms`, `air_conditioners`, `devices`, `sensor_readings`, `monthly_summaries` e `alembic_version`.
+
+`database/pgadmin-servers.json` permite importar os cadastros pelo menu Tools > Import/Export Servers. Não contém senhas. `database/consultas.sql` contém consultas de inventário, leituras e médias.
+
+## Desenvolvimento local separado
+
+Para experimentar sem acessar o banco existente:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.localdev setup --port 5433
+```
+
+O comando usa os binários PostgreSQL já instalados, cria uma instância própria em `.local/postgres-dev`, os bancos `Movement` e `Movement_test`, a sala inicial e um dispositivo. O banco existente na porta 5432 é preservado. Se os binários não forem encontrados, informe `--postgres-bin "C:\Program Files\PostgreSQL\18\bin"`.
+
+As credenciais geradas ficam somente em `.local/postgres-dev/access.txt`. A configuração privada é criada em `backend/.env`. O setup não sobrescreve uma configuração que aponte para outro banco.
+
+## Iniciar o site
+
+```powershell
+.\scripts\iniciar.ps1 -BancoLocal
+```
+
+Para o banco existente, após executar `app.configure_existing`, use `.\scripts\iniciar.ps1` sem `-BancoLocal`.
+
+- Site: <http://127.0.0.1:5173>
+- API e documentação interativa: <http://127.0.0.1:8000/docs>
+- Disponibilidade do banco e migrações: <http://127.0.0.1:8000/ready>
+
+Os processos iniciam em segundo plano; os logs ficam em `.local/logs`. Para encerrá-los, execute `.\scripts\parar.ps1`. Para parar também o banco isolado, execute `.\.venv\Scripts\python.exe -m app.localdev stop`. Os dados são preservados.
+
+Alternativamente, execute a API em um terminal na pasta `backend` e o frontend em outro na pasta `frontend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
+npm.cmd run dev
+```
+
+O frontend usa `/api` e o proxy do Vite durante o desenvolvimento. Em produção, configure um proxy reverso que encaminhe `/api` ao FastAPI, removendo esse prefixo; sirva `frontend/dist` como arquivos estáticos e use HTTPS. `vite preview` apenas serve o build e não substitui esse proxy.
+
+## Regras de retenção
+
+1. Leituras detalhadas ficam disponíveis por 30 dias, contados pelo horário da medição.
+2. A API consolida as leituras mais antigas ao iniciar e a cada hora. A limpeza física pode ocorrer até uma hora depois do limite; as consultas detalhadas já ocultam leituras vencidas.
+3. Cada sala tem uma única linha consolidada por mês civil, no fuso `America/Sao_Paulo`.
+4. A consolidação acumula somas e quantidades. As médias são colunas geradas e armazenadas pelo PostgreSQL. Novos lotes são ponderados pela quantidade de amostras; médias de lotes não são promediadas entre si.
+5. A remoção das leituras e o armazenamento dos acumuladores ocorrem na mesma transação. Um bloqueio transacional evita contagem duplicada entre vários processos.
+6. O endpoint mensal combina as amostras consolidadas com as ainda detalhadas para apresentar uma única média do mês, sem sobreposição. O mês é parcial enquanto ainda houver uma parte dentro da janela de 30 dias; fica concluído quando todo o mês passou desse limite.
+7. O resumo é mantido por 12 meses após o encerramento do respectivo mês. Exemplo: setembro/2026 fica salvo até 01/10/2027, às 00:00 no fuso de São Paulo. O painel pode mostrar 12 meses encerrados e o mês atual parcial.
+8. Sem amostras, não se cria média artificial nem registro com zero. Leituras com mais de 30 dias são recusadas na entrada da API.
+
+As médias são por amostra: temperatura interna/externa, umidade interna/externa, ocupação e percentual de amostras com A/C ligado. Esse percentual não é consumo de energia nem representa medição individual de cada aparelho.
+
+Para uma execução manual ou agendada pelo sistema operacional, na pasta `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m app.cli retain
+```
+
+A retenção depende de a API ou esse comando estar em execução. Após um período desligado, a próxima execução processa o acúmulo de dados antes de descartar resumos vencidos. Configure `MOVEMENT_RETENTION_ENABLED=false` se adotar exclusivamente um agendador externo.
+
+## Sensores e teste sem hardware
+
+Cadastre o dispositivo em Salas e aparelhos e guarde o token exibido. Cada sala aceita um ESP32 responsável pelas medições ambientais, independentemente da quantidade de aparelhos do inventário.
+
+```powershell
+.\.venv\Scripts\python.exe backend\scripts\publish_sample.py
+```
+
+O token é solicitado sem eco. A leitura publicada por esse comando é simulada; use-o somente no ambiente de desenvolvimento. O fluxo completo é `ESP32 -> POST /telemetry -> PostgreSQL -> FastAPI -> React`.
+
+O firmware mantém a simulação de climatização e os sensores do projeto entregue. Agora publica na API; o envio ThingSpeak/TalkBack fica desativado por padrão. Copie `firmware/climacontrol/config.h.example` para `config.h` e configure URL, token e certificado CA quando usar HTTPS. O arquivo privado é ignorado pelo Git. Nenhuma chave ThingSpeak original foi mantida na versão distribuída.
+
+Para ESP32 físico, o endereço da API precisa ser alcançável pela rede do dispositivo. Em desenvolvimento de rede local, execute o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. O Wokwi precisa de gateway/túnel para acessar uma API local. O relógio é sincronizado por NTP e cada mensagem usa UUID; reenvios mantêm o mesmo conteúdo até a confirmação. A fila do firmware contém uma mensagem em RAM e não substitui uma fila persistente em flash.
+
+O LED IR continua sendo uma simulação herdada da entrega; não implementa o protocolo real dos diferentes fabricantes. O firmware não foi compilado nem testado em hardware nesta execução.
+
+## Verificações
+
+```powershell
+npm.cmd run lint --prefix frontend
+npm.cmd run test --prefix frontend
+npm.cmd run build --prefix frontend
+.\.venv\Scripts\python.exe -m ruff check backend
+```
+
+Os testes de backend exigem um banco separado com nome terminado em `_test`. O setup local gera a URL em `.local/postgres-dev/test.env`. Carregue-a sem imprimir a senha:
+
+```powershell
+$testConfig = Get-Content .local\postgres-dev\test.env -Raw
+$env:MOVEMENT_TEST_DATABASE_URL = $testConfig.Trim().Substring('MOVEMENT_TEST_DATABASE_URL='.Length)
+.\.venv\Scripts\python.exe -m pytest backend\tests -q
+```
+
+Os testes criam e removem apenas um schema aleatório nesse banco de testes. Cobrem autenticação, validação, idempotência, concorrência, cadastros, isolamento por sala, migrações, média ponderada, fronteiras de data, retenção de 12 meses e reversão da remoção quando a agregação falha. A integração contínua executa backend e frontend no GitHub.
+
+A autorização atual é de um único operador para todos os ambientes. Dados de energia, comandos físicos, múltiplos operadores e permissões por sala exigem implementações adicionais.
