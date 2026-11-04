@@ -88,6 +88,28 @@ No pgAdmin: `Servers > Movement > Databases > Movement > Schemas > movement > Ta
 
 `database/pgadmin-servers.json` permite importar os cadastros pelo menu Tools > Import/Export Servers. Não contém senhas. `database/consultas.sql` contém consultas de inventário, leituras e médias.
 
+## Banco gerenciado no Supabase
+
+O banco em nuvem é o projeto Supabase "Movement" (`ifirpelguapcdszegqqm`, região `us-west-2`, PostgreSQL 17). As tabelas ficam no schema `movement`. O schema `public` fica vazio porque o Supabase o expõe pela API REST com a chave anônima.
+
+A conexão usa o Session pooler, `aws-1-us-west-2.pooler.supabase.com:5432`, que aceita IPv4. A conexão direta `db.ifirpelguapcdszegqqm.supabase.co` só tem IPv6, e o Transaction pooler (porta 6543) não preserva configurações de sessão entre transações; por isso nenhum dos dois é usado.
+
+Para aplicar as migrações e gerar a configuração, na pasta `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m app.configure_existing --url "postgresql://postgres.ifirpelguapcdszegqqm@aws-1-us-west-2.pooler.supabase.com:5432/postgres" --env-file .env.supabase
+```
+
+O comando solicita a senha do banco (Project Settings > Database) e, na primeira execução, cria a senha do administrador de produção. Fora desta máquina a conexão exige TLS (`sslmode=require`). O resultado fica em `backend/.env.supabase`, fora do Git, e o `backend/.env` local é preservado. Como o pooler ignora o `search_path` da URL, a API define o schema em cada conexão a partir de `MOVEMENT_DATABASE_SCHEMA=movement`.
+
+Para executar a API local com o banco do Supabase, na pasta `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --env-file .env.supabase --host 127.0.0.1 --port 8000
+```
+
+As variáveis do arquivo informado têm prioridade sobre `backend/.env`. No serviço que hospedar a API, cadastre os mesmos valores de `backend/.env.supabase` como variáveis secretas e ajuste `MOVEMENT_CORS_ORIGINS` para o domínio publicado. O painel de segurança do Supabase (Advisors) não aponta alertas para esta configuração.
+
 ## Desenvolvimento local separado
 
 Para experimentar sem acessar o banco existente:

@@ -7,13 +7,32 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.security import hash_password
 from app.settings import Settings
 
 BACKEND = Path(__file__).resolve().parents[1]
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def connection_url(args: argparse.Namespace, password: str) -> URL:
+    if args.url:
+        url = make_url(args.url).set(drivername="postgresql+psycopg", password=password)
+    else:
+        url = URL.create(
+            "postgresql+psycopg",
+            username=args.user,
+            password=password,
+            host=args.host,
+            port=args.port,
+            database=args.database,
+        )
+    # Bancos fora desta máquina, como o Supabase, recebem a conexão sempre cifrada.
+    if url.host not in LOCAL_HOSTS:
+        url = url.update_query_dict({"sslmode": "require"})
+    return url
 
 
 def migrate_existing(url: URL):
@@ -50,18 +69,14 @@ def main():
     parser.add_argument("--port", type=int, default=5432)
     parser.add_argument("--user", default="postgres")
     parser.add_argument("--database", default="Movement")
+    parser.add_argument("--url", help="URL sem senha, como a do Session pooler do Supabase")
+    parser.add_argument("--env-file", default=".env", help="Arquivo de configuração em backend/")
     args = parser.parse_args()
     password = getpass.getpass("Senha PostgreSQL (não será exibida): ")
-    url = URL.create(
-        "postgresql+psycopg",
-        username=args.user,
-        password=password,
-        host=args.host,
-        port=args.port,
-        database=args.database,
-    )
-    dotenv = BACKEND / ".env"
-    if dotenv.exists():
+    url = connection_url(args, password)
+    dotenv = BACKEND / args.env_file
+    kept_login = dotenv.exists()
+    if kept_login:
         settings = Settings(_env_file=dotenv)
         session_secret = settings.session_secret.get_secret_value()
         password_hash = settings.operator_password_hash.get_secret_value()
@@ -84,9 +99,9 @@ def main():
             else "Falha de conexão ou migração; confira banco, host, porta, usuário e senha"
         )
         parser.exit(1, detail + "; arquivo .env preservado.\n")
-    target_url = url.update_query_dict({"options": "-csearch_path=movement"})
     values = {
-        "MOVEMENT_DATABASE_URL": target_url.render_as_string(hide_password=False),
+        "MOVEMENT_DATABASE_URL": url.render_as_string(hide_password=False),
+        "MOVEMENT_DATABASE_SCHEMA": "movement",
         "MOVEMENT_SESSION_SECRET": session_secret,
         "MOVEMENT_OPERATOR_USERNAME": username,
         "MOVEMENT_OPERATOR_PASSWORD_HASH": password_hash,
@@ -103,8 +118,10 @@ def main():
     print(
         "Banco conectado e migrações aplicadas. No pgAdmin: Movement > Schemas > movement > Tables."
     )
+    print(f"Configuração gravada em backend/{args.env_file}.")
+    login = "O login configurado foi mantido." if kept_login else "O login admin foi criado."
     print(
-        "Reinicie a API. O login configurado foi mantido. "
+        f"Reinicie a API. {login} "
         "Uma configuração anterior, se existente, foi copiada para um backup privado."
     )
 

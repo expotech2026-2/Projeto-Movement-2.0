@@ -1,6 +1,7 @@
 from alembic import context
-from sqlalchemy import create_engine, pool
+from sqlalchemy import pool
 
+from app.database import build_engine
 from app.models import Base
 from app.settings import get_settings
 
@@ -21,7 +22,7 @@ elif context.config.attributes.get("connection") is not None:
     with context.begin_transaction():
         context.run_migrations()
 else:
-    engine = create_engine(url, poolclass=pool.NullPool, hide_parameters=True)
+    engine = build_engine(get_settings(), poolclass=pool.NullPool)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=Base.metadata)
         with context.begin_transaction():

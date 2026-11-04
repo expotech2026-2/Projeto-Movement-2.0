@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     )
 
     database_url: SecretStr
+    database_schema: str | None = Field(default=None, pattern=r"^[a-z_][a-z0-9_]{0,62}$")
     session_secret: SecretStr
     operator_username: str = "admin"
     operator_password_hash: SecretStr
