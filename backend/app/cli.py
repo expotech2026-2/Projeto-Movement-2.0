@@ -6,6 +6,7 @@ from psycopg import Error as PostgresError
 from sqlalchemy import select
 
 from app.database import build_session_factory
+from app.management import default_unit
 from app.models import Device, Room
 from app.security import hash_device_token, hash_password
 from app.settings import get_settings
@@ -20,6 +21,10 @@ def main():
     local.add_argument("action", choices=["setup", "start", "stop", "status"])
     local.add_argument("--port", type=int, default=5433)
     local.add_argument("--postgres-bin")
+    catalog = sub.add_parser(
+        "catalog-import", help="Recarregar o catálogo Inmetro de condicionadores de ar"
+    )
+    catalog.add_argument("--file", help="CSV gerado por scripts/inmetro_catalog.py")
     device = sub.add_parser("create-device", help="Cadastrar ambiente e dispositivo")
     device.add_argument("--room", required=True)
     device.add_argument("--name", required=True)
@@ -32,6 +37,22 @@ def main():
         try:
             with sessions() as session:
                 print(consolidate(session))
+        finally:
+            sessions.kw["bind"].dispose()
+        return
+    if args.command == "catalog-import":
+        from pathlib import Path
+
+        from app.catalog import CATALOG_CSV, read_catalog, replace_catalog
+
+        try:
+            rows = read_catalog(Path(args.file) if args.file else CATALOG_CSV)
+        except (OSError, KeyError, ValueError) as error:
+            parser.exit(1, f"Catálogo inválido: {error}\n")
+        sessions = build_session_factory(get_settings())
+        try:
+            with sessions() as session:
+                print(f"{replace_catalog(session, rows)} modelos carregados no catálogo.")
         finally:
             sessions.kw["bind"].dispose()
         return
@@ -71,7 +92,7 @@ def main():
                     "Dispositivo ou ambiente já cadastrado; nenhuma credencial foi alterada"
                 )
             if session.get(Room, args.room) is None:
-                session.add(Room(id=args.room, name=args.name))
+                session.add(Room(id=args.room, name=args.name, unit_id=default_unit(session).id))
                 session.flush()
             token = secrets.token_urlsafe(32)
             session.add(

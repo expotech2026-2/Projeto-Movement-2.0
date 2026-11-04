@@ -12,9 +12,9 @@ export function OperatorLogin({ onLogin }) {
     setBusy(true);
     setError(null);
     try {
-      await login(username, password);
+      const user = await login(username, password);
       setPassword("");
-      onLogin();
+      onLogin(user);
     } catch (err) {
       setError(err.message);
     } finally {

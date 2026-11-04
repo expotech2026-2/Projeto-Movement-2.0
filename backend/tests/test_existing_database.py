@@ -17,7 +17,7 @@ def test_migrations_accept_an_existing_connection_without_committing_outer_trans
         assert transaction.is_active
         assert (
             connection.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0002_room_management"
+            == "0003_units_users_catalog"
         )
         transaction.rollback()
     engine.dispose()

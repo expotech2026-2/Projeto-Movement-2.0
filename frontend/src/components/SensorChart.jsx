@@ -8,6 +8,8 @@ import {
   YAxis,
 } from "recharts";
 
+const axisTick = { fill: "var(--chart-axis)" };
+
 export default function SensorChart({ points }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -18,27 +20,36 @@ export default function SensorChart({ points }) {
         <CartesianGrid
           strokeDasharray="3 5"
           vertical={false}
-          stroke="#e9eeee"
+          stroke="var(--chart-grid)"
         />
         <XAxis
           dataKey="time"
-          tick={{ fontSize: 11 }}
+          tick={{ ...axisTick, fontSize: 11 }}
           minTickGap={60}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
           unit="°"
-          tick={{ fontSize: 12 }}
+          tick={{ ...axisTick, fontSize: 12 }}
           axisLine={false}
           tickLine={false}
         />
-        <Tooltip />
+        <Tooltip
+          cursor={{ stroke: "var(--border-strong)" }}
+          contentStyle={{
+            background: "var(--surface-raised)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            color: "var(--text)",
+          }}
+          labelStyle={{ color: "var(--muted)" }}
+        />
         <Line
           type="monotone"
           dataKey="temp_inside"
           name="Interna (°C)"
-          stroke="#149b85"
+          stroke="var(--chart-1)"
           strokeWidth={2.5}
           dot={false}
         />
@@ -46,7 +57,7 @@ export default function SensorChart({ points }) {
           type="monotone"
           dataKey="temp_outside"
           name="Externa (°C)"
-          stroke="#92b8cd"
+          stroke="var(--chart-2)"
           strokeWidth={2}
           dot={false}
         />
