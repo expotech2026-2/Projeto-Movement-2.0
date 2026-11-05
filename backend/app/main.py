@@ -12,12 +12,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.auth import authenticate, issue_principal_session
 from app.catalog import create_catalog_router
 from app.database import build_session_factory
-from app.dependencies import CurrentUser, Db, require_device, require_user
+from app.dependencies import CurrentUser, Db, Repository, require_device, require_user
 from app.events import create_alerts_router, default_subject
 from app.management import create_management_router
 from app.models import Device
 from app.reports import create_reports_router
-from app.repository import DuplicateConflict, PostgresTelemetryRepository, room_exists
+from app.repository import DuplicateConflict, room_exists
 from app.retention import retention_loop
 from app.sampling import create_sampling_router
 from app.schemas import (
@@ -116,9 +116,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response: Response,
         session: Db,
         device: Annotated[Device, Depends(require_device)],
+        repository: Repository,
     ):
         try:
-            reading, duplicate = PostgresTelemetryRepository(session).save(device, payload)
+            reading, duplicate = repository.save(device, payload)
         except DuplicateConflict:
             raise HTTPException(409, "message_id já utilizado com outra leitura") from None
         if duplicate:
@@ -136,10 +137,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(require_user)],
         tags=["Leituras"],
     )
-    def latest(room_id: str, session: Db):
+    def latest(room_id: str, session: Db, repository: Repository):
         if not room_exists(session, room_id):
             raise HTTPException(404, "Ambiente não encontrado")
-        reading = PostgresTelemetryRepository(session).latest(room_id)
+        reading = repository.latest(room_id)
         age = max(0, (datetime.now(UTC) - reading.measured_at).total_seconds()) if reading else None
         return LatestResponse(
             reading=ReadingResponse.model_validate(reading) if reading else None,
@@ -156,12 +157,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def history(
         room_id: str,
         session: Db,
+        repository: Repository,
         limit: Annotated[int, Query(ge=1, le=2000)] = 500,
         since: AwareDatetime | None = None,
     ):
         if not room_exists(session, room_id):
             raise HTTPException(404, "Ambiente não encontrado")
-        return PostgresTelemetryRepository(session).history(room_id, limit, since)
+        return repository.history(room_id, limit, since)
 
     app.include_router(create_management_router())
     app.include_router(create_catalog_router())
