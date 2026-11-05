@@ -39,7 +39,7 @@
       "id": "r1",
       "top": 99.95,
       "left": 288,
-      "attrs": { "value": "10" }
+      "attrs": { "value": "150" }
     },
     {
       "type": "wokwi-text",
