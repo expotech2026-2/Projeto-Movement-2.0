@@ -18,6 +18,7 @@ from app.models import Device
 from app.reports import create_reports_router
 from app.repository import DuplicateConflict, PostgresTelemetryRepository, room_exists
 from app.retention import retention_loop
+from app.sampling import create_sampling_router
 from app.schemas import (
     CurrentUserResponse,
     LatestResponse,
@@ -160,4 +161,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_catalog_router())
     app.include_router(create_users_router())
     app.include_router(create_reports_router())
+    app.include_router(create_sampling_router())
     return app
