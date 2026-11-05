@@ -416,8 +416,9 @@ void enviarMovement() {
   http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
-  Serial.printf("[Movement] HTTP %d\n", code);
+  Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
   if (code == 200 || code == 201 || code == 422) movementPendingPayload = "";
   http.end();
 }
