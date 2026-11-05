@@ -31,7 +31,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0003_units_users_catalog"
+SCHEMA_VERSION = "0004_alerts"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -84,7 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             session.execute(
                 text(
                     "SELECT 1 FROM sensor_readings, air_conditioners, monthly_summaries, "
-                    "units, users, ac_catalog LIMIT 1"
+                    "units, users, ac_catalog, alerts LIMIT 1"
                 )
             )
         except SQLAlchemyError:

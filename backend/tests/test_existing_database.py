@@ -15,9 +15,6 @@ def test_migrations_accept_an_existing_connection_without_committing_outer_trans
         config.attributes["connection"] = connection
         command.upgrade(config, "head")
         assert transaction.is_active
-        assert (
-            connection.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0003_units_users_catalog"
-        )
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_alerts"
         transaction.rollback()
     engine.dispose()
