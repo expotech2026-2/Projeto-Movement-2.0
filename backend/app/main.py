@@ -13,6 +13,7 @@ from app.auth import authenticate, issue_principal_session
 from app.catalog import create_catalog_router
 from app.database import build_session_factory
 from app.dependencies import CurrentUser, Db, require_device, require_user
+from app.events import create_alerts_router, default_subject
 from app.management import create_management_router
 from app.models import Device
 from app.reports import create_reports_router
@@ -57,6 +58,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Movement — Gestão de climatização", version="2.0.0", lifespan=lifespan)
     app.state.settings = config
     app.state.sessions = sessions
+    app.state.telemetry_events = default_subject()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -110,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/telemetry", response_model=TelemetryReceipt, status_code=201, tags=["Dispositivo"])
     def telemetry(
         payload: TelemetryInput,
+        request: Request,
         response: Response,
         session: Db,
         device: Annotated[Device, Depends(require_device)],
@@ -120,6 +123,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(409, "message_id já utilizado com outra leitura") from None
         if duplicate:
             response.status_code = 200
+        else:
+            request.app.state.telemetry_events.notify(session, reading)
+            session.commit()
         return TelemetryReceipt(
             duplicate=duplicate, reading=ReadingResponse.model_validate(reading)
         )
@@ -162,4 +168,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_users_router())
     app.include_router(create_reports_router())
     app.include_router(create_sampling_router())
+    app.include_router(create_alerts_router())
     return app
