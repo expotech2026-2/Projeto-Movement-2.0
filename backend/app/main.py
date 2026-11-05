@@ -6,13 +6,13 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AwareDatetime
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import authenticate, issue_principal_session
 from app.catalog import create_catalog_router
 from app.database import build_session_factory
-from app.dependencies import Credentials, CurrentUser, Db, require_user
+from app.dependencies import CurrentUser, Db, require_device, require_user
 from app.management import create_management_router
 from app.models import Device
 from app.reports import create_reports_router
@@ -27,27 +27,10 @@ from app.schemas import (
     TelemetryInput,
     TelemetryReceipt,
 )
-from app.security import hash_device_token
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
 SCHEMA_VERSION = "0003_units_users_catalog"
-
-
-def require_device(session: Db, credentials: Credentials) -> Device:
-    device = None
-    if credentials:
-        device = session.scalar(
-            select(Device).where(
-                Device.token_hash == hash_device_token(credentials.credentials),
-                Device.enabled.is_(True),
-            )
-        )
-    if device is None:
-        raise HTTPException(
-            401, "Dispositivo não autorizado", headers={"WWW-Authenticate": "Bearer"}
-        )
-    return device
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
