@@ -15,6 +15,7 @@ Gestão de salas e aparelhos de ar-condicionado, baseada no Projeto Integrador e
 - Telemetria por dispositivo, sem aceitar uma sala informada pelo cliente.
 - Painel com temperatura, umidade, ocupação, inventário e gráfico por período.
 - Histórico mensal por sala e exportação CSV; atualização automática a cada 15 segundos.
+- Plano de leitura do ESP32 otimizado por programação linear inteira: intervalo de envio por hora, economia de energia e análise de sensibilidade ([docs/pesquisa-operacional.md](docs/pesquisa-operacional.md)).
 - Migrações, autenticação, validação, CORS restrito e proteção de salas com dados vinculados.
 
 O status do inventário indica a situação cadastral do equipamento. O estado ligado/desligado vem da telemetria do sensor da sala. Esta versão não envia comandos físicos de ligar/desligar pelo site.

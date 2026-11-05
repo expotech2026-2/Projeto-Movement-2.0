@@ -23,14 +23,16 @@ FastAPI, SQLAlchemy, Alembic e PostgreSQL. Veja o [guia principal](../README.md)
 | GET | `/rooms/{room_id}/monthly` | Sessão | Uma média por sala/mês |
 | GET | `/catalog`, `/catalog/brands`, `/catalog/models` | Sessão | Catálogo Inmetro: fonte, marcas e modelos filtrados por `brand`, `kind` e `q` |
 | GET | `/reports/pdf?unit_id=&room_id=` | Sessão | Relatório PDF de todas as unidades, de uma unidade ou de uma sala |
+| GET | `/rooms/{room_id}/sampling-plan?budget_ratio=` | Sessão | Plano de leitura otimizado: intervalo por hora, energia, economia e erro esperado |
 | GET / POST / PUT / DELETE | `/users[/{user_id}]` | Administrador | Gerenciar administradores e professores |
 | POST | `/telemetry` | Token do dispositivo | Publicar medição |
+| GET | `/devices/me/sampling-interval` | Token do dispositivo | Intervalo de envio da hora atual para o ESP32 |
 
 Consulte os schemas e exemplos atualizados em `/docs` ou `/openapi.json`. `history` aceita `limit` de 1 a 2.000 e `since` em ISO 8601 com fuso. Limite padrão: 500.
 
 ## Organização do fluxo
 
-`main.py` cuida do login, telemetria e consultas detalhadas. `auth.py` e `dependencies.py` resolvem a sessão e o perfil (Administrador ou Professor); `users.py` gerencia os usuários. `management.py` contém o cadastro de unidades, salas, aparelhos e dispositivos. `catalog.py` serve o catálogo Inmetro e `reports.py` gera o relatório PDF com `reportlab`. `models.py` define as tabelas, e `repository.py` persiste leituras com idempotência. `retention.py` consolida e elimina dados vencidos na mesma transação.
+`main.py` cuida do login, telemetria e consultas detalhadas. `auth.py` e `dependencies.py` resolvem a sessão e o perfil (Administrador ou Professor); `users.py` gerencia os usuários. `management.py` contém o cadastro de unidades, salas, aparelhos e dispositivos. `catalog.py` serve o catálogo Inmetro e `reports.py` gera o relatório PDF com `reportlab`. `models.py` define as tabelas, e `repository.py` persiste leituras com idempotência. `retention.py` consolida e elimina dados vencidos na mesma transação. `optimization.py` modela e resolve o plano de leitura (programação linear inteira com `scipy.optimize.milp`), e `sampling.py` o expõe ao painel e ao ESP32.
 
 O token identifica o dispositivo e sua sala; a API não aceita `room_id` no corpo da telemetria. A chave única `(device_id, message_id)` impede duplicação. Reenvio idêntico retorna 200; conteúdo diferente retorna 409. Novas leituras retornam 201. Datas fora da janela permitida e valores inválidos retornam 422.
 
