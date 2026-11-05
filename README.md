@@ -54,6 +54,7 @@ backend/app/          FastAPI, modelos, serviços e retenção
 backend/migrations/   Migrações Alembic
 backend/tests/        Testes com PostgreSQL separado
 database/             Consultas e importação de servidores no pgAdmin
+docs/                 Documentação dos requisitos da ExpoTech (física, pesquisa operacional, arquitetura, eletrônica)
 firmware/             ESP32 do projeto original com envio para FastAPI
 scripts/              Inicialização e encerramento no Windows
 ```
