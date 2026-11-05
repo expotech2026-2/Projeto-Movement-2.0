@@ -6,6 +6,7 @@ import {
   getSessionToken,
   login,
   request,
+  samplingPlan,
 } from "./movementApi";
 import { apiConfig } from "../config/api";
 
@@ -119,6 +120,20 @@ describe("API Movement", () => {
       expect.objectContaining({
         headers: { Authorization: "Bearer valid-token" },
       }),
+    );
+  });
+
+  it("consulta o plano de leitura com o orçamento escolhido", async () => {
+    fetch.mockResolvedValueOnce(
+      new Response('{"hours":[],"energy_j":0}', { status: 200 }),
+    );
+    await expect(samplingPlan("sala-1", 0.3)).resolves.toEqual({
+      hours: [],
+      energy_j: 0,
+    });
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala-1/sampling-plan?budget_ratio=0.3`,
+      expect.objectContaining({ cache: "no-store" }),
     );
   });
 
