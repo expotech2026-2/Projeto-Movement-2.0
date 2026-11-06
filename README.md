@@ -405,7 +405,7 @@ No modo automático, o resfriamento só atua com a sala ocupada. Equações, con
 - Para o DHT11 da montagem, inclua `#define MOVEMENT_DHT_TYPE DHT11` no `config.h`. Sem essa linha vale o DHT22, que é o modelo do Wokwi.
 - O relógio é sincronizado por NTP e cada mensagem usa um UUID. Os reenvios mantêm o mesmo conteúdo até a confirmação.
 - A fila guarda uma mensagem em RAM e não substitui uma fila persistente em flash.
-- O envio para o ThingSpeak/TalkBack do projeto original fica desativado por padrão, e nenhuma chave original foi mantida.
+- **Modo manual:** digite no monitor serial `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo (de 18 a 30). Ele volta ao automático depois de 30 min. O ThingSpeak/TalkBack do projeto original foi removido.
 
 Na rede local, o ESP32 físico precisa alcançar a API: rode o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. Para testar sem hardware, publique uma leitura simulada. O token é solicitado sem eco, e o comando é só para desenvolvimento:
 
@@ -481,7 +481,7 @@ firmware/climacontrol/
 hardware/logica/                         # verificação das equações e teste C++ da lógica da porta (CI)
 docs/                                    # física, eletrônica digital, arquitetura e pesquisa operacional
 database/                                # consultas SQL e importação de servidores no pgAdmin
-scripts/                                 # iniciar.ps1, parar.ps1 e smoke.py (teste rápido da API local)
+scripts/                                 # iniciar.ps1 e parar.ps1: sobem e encerram o site e a API no Windows
 .github/workflows/ci.yml                 # CI em todas as branches; publicação da imagem só na main
 ```
 

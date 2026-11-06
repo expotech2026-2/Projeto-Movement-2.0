@@ -1,4 +1,4 @@
-// SMART AC CONTROLLER — Automático + Manual (TalkBack) Bibliotecas (libraries.txt): DHT sensor library Adafruit Unified Sensor /
+// Movement 2.0 — controle de climatização da sala (ESP32). Bibliotecas: libraries.txt.
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -15,17 +15,11 @@
 #define MOVEMENT_CA_CERT ""
 #endif
 
-const bool ENABLE_THINGSPEAK_LEGACY = false;
 String movementPendingPayload;
 
-// ── WiFi / ThingSpeak ──────────────────────────────────────────────────────
+// ── WiFi ───────────────────────────────────────────────────────────────────
 #define WIFI_SSID      "Wokwi-GUEST"
 #define WIFI_PASSWORD  ""
-#define TS_WRITE_KEY   "PREENCHA_LOCALMENTE"
-
-// TalkBack — pegue em Apps > TalkBack > (seu TalkBack)
-#define TALKBACK_ID    "PREENCHA_LOCALMENTE"
-#define TALKBACK_KEY   "PREENCHA_LOCALMENTE"
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -81,8 +75,8 @@ float tempInternaAjustada = 0.0;
 bool  primeiraLeitura     = true;
 
 float tempExternaAtual = 25.0;
-float umidExternaAtual = 0.0;        // umidade relativa externa  -> field6
-float umidInternaAtual = 0.0;        // umidade relativa interna  -> field5
+float umidExternaAtual = 0.0;        // umidade relativa externa
+float umidInternaAtual = 0.0;        // umidade relativa interna
 float tempRecomendada  = TEMP_CONFORTO_BASE;
 float tempAlvoAC       = TEMP_CONFORTO_BASE;
 bool  acLigado         = false;
@@ -93,14 +87,12 @@ int   ultimoComandoAC  = -1;
 unsigned long ultimaLeituraDHT   = 0;
 unsigned long ultimoCalculoCalor = 0;
 unsigned long ultimoResfriamento = 0;
-unsigned long ultimoEnvioTS      = 0;
-unsigned long ultimaConsultaTB   = 0;
+unsigned long ultimoEnvio         = 0;
 unsigned long ultimaConsultaPlano = 0;
 const unsigned long intervaloDHT      = 2000;
 const unsigned long intervaloCalor    = 10000;
 const unsigned long intervaloResfr    = 1000;
 unsigned long intervaloEnvio          = 16000; // ajustado pelo plano otimizado da API (15 a 300 s)
-const unsigned long intervaloTalkBack = 15000; // checa fila a cada 15s
 const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cada 15 min
 
 // ── Pulso IR (LED) ─────────────────────────────────────────────────────────
@@ -114,6 +106,7 @@ const unsigned long PAUSA_PULSO   = 200;
 // ════════════════════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
+  Serial.setTimeout(100);   // comandos manuais chegam por linha no monitor serial
   delay(300);
 
   pinMode(pinBarreiraA, INPUT_PULLUP);   // contato do relé da barreira entre o pino e o GND
@@ -191,13 +184,14 @@ void atualizarAutomatico() {
   definirAlvoAC(tempRecomendada, "AUTOMATICO");
 }
 
-// ── Processa comando recebido do TalkBack ──────────────────────────────────
+// ── Comando manual digitado no monitor serial ──────────────────────────────
+// AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP- ou a temperatura alvo (18 a 30).
 void processarComandoManual(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
-  Serial.println("[TalkBack] Comando recebido: " + cmd);
+  if (cmd.isEmpty()) return;
+  Serial.println("[Manual] Comando recebido: " + cmd);
 
-  // Volta ao automático. O dashboard envia MANUAL_OFF; aceitamos AUTO também.
   if (cmd == "AUTO" || cmd == "AUTOMATICO" || cmd == "MANUAL_OFF") {
     modoAtual = MODO_AUTOMATICO;
     acForcadoOff = false;
@@ -206,14 +200,14 @@ void processarComandoManual(String cmd) {
     return;
   }
 
-  // Entra em modo manual sem mexer no alvo (dashboard: MANUAL_ON).
+  // Entra em modo manual sem mexer no alvo.
   if (cmd == "MANUAL_ON" || cmd == "MANUAL") {
     modoAtual = MODO_MANUAL; inicioModoManual = millis();
     Serial.println(F("[MODO] -> MANUAL"));
     return;
   }
 
-  // Liga o A/C (retoma o resfriamento até o alvo) — dashboard: AC_ON.
+  // Liga o A/C (retoma o resfriamento até o alvo).
   if (cmd == "AC_ON") {
     modoAtual = MODO_MANUAL; inicioModoManual = millis();
     acForcadoOff = false;
@@ -221,7 +215,7 @@ void processarComandoManual(String cmd) {
     return;
   }
 
-  // Desliga o A/C (para de resfriar, mantém modo manual) — dashboard: AC_OFF.
+  // Desliga o A/C (para de resfriar, mantém modo manual).
   if (cmd == "AC_OFF") {
     modoAtual = MODO_MANUAL; inicioModoManual = millis();
     acForcadoOff = true;
@@ -259,34 +253,10 @@ void processarComandoManual(String cmd) {
     inicioModoManual = millis();
     acForcadoOff = false;
     Serial.println(F("[MODO] -> MANUAL (automatico suspenso)"));
-    definirAlvoAC(valor, "MANUAL (TalkBack)");
+    definirAlvoAC(valor, "MANUAL (serial)");
   } else {
-    Serial.println(F("[TalkBack] Comando ignorado (fora de 18-30 ou invalido)"));
+    Serial.println(F("[Manual] Comando ignorado (fora de 18-30 ou invalido)"));
   }
-}
-
-// ── Consulta a fila do TalkBack ────────────────────────────────────────────
-void consultarTalkBack() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  HTTPClient http;
-  String url = "http://api.thingspeak.com/talkbacks/" + String(TALKBACK_ID) + "/commands/execute";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
-  String body = "api_key=" + String(TALKBACK_KEY);
-
-  int code = http.POST(body);
-  if (code == 200) {
-    String resp = http.getString();
-    resp.trim();
-    if (resp.length() > 0) {
-      processarComandoManual(resp);   // havia comando na fila
-    }
-    // se vazio: nada a fazer, segue automático
-  } else {
-    Serial.printf("[TalkBack] Erro HTTP: %d\n", code);
-  }
-  http.end();
 }
 
 // ── Verifica timeout do modo manual ────────────────────────────────────────
@@ -359,32 +329,6 @@ void lerClima() {
   Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "ALTERANDO" : "espera");
   Serial.printf("| Pessoas:     %d  (%.0f W)\n", totalPessoas, totalPessoas * WATTS_POR_PESSOA);
   Serial.println(F("+-------------------------------+"));
-}
-
-// ── Envio ao ThingSpeak ────────────────────────────────────────────────────
-// Mapeamento dos 8 fields (fonte da verdade compartilhada com o dashboard em
-// src/config/thingspeak.js e mobile/src/config/thingspeak.js):
-//   field1 = ocupacao (pessoas)   field5 = umid_interna
-//   field2 = temp_interna         field6 = umid_externa
-//   field3 = temp_externa         field7 = ac_ligado   (0/1)
-//   field4 = temp_alvo            field8 = modo_manual (0/1)
-void enviarThingSpeak() {
-  if (WiFi.status() != WL_CONNECTED) { conectarWiFi(); return; }
-  HTTPClient http;
-  String url = "http://api.thingspeak.com/update?api_key=" + String(TS_WRITE_KEY);
-  url += "&field1=" + String(totalPessoas);                       // ocupacao
-  url += "&field2=" + String(tempInternaAjustada, 1);             // temp_interna
-  url += "&field3=" + String(tempExternaAtual, 1);                // temp_externa
-  url += "&field4=" + String(tempAlvoAC, 1);                      // temp_alvo
-  url += "&field5=" + String(umidInternaAtual, 1);               // umid_interna
-  url += "&field6=" + String(umidExternaAtual, 1);              // umid_externa
-  url += "&field7=" + String(acLigado ? 1 : 0);                   // ac_ligado
-  url += "&field8=" + String(modoAtual == MODO_MANUAL ? 1 : 0);   // modo_manual
-  http.begin(url);
-  int code = http.GET();
-  if (code == 200) Serial.println("[TS] Enviado. Entry #" + http.getString());
-  else             Serial.printf("[TS] Erro HTTP: %d\n", code);
-  http.end();
 }
 
 String movementMessageId() {
@@ -566,11 +510,8 @@ void loop() {
     lerClima();
   }
 
-  // 5) Consulta TalkBack (override manual)
-  if (ENABLE_THINGSPEAK_LEGACY && agora - ultimaConsultaTB >= intervaloTalkBack) {
-    ultimaConsultaTB = agora;
-    consultarTalkBack();
-  }
+  // 5) Comando manual pelo monitor serial
+  if (Serial.available()) processarComandoManual(Serial.readStringUntil('\n'));
 
   // 6) Timeout do modo manual
   verificarTimeoutManual();
@@ -581,11 +522,10 @@ void loop() {
     atualizarIntervalo();
   }
 
-  // 7) Envio ThingSpeak
-  if (agora - ultimoEnvioTS >= intervaloEnvio) {
-    ultimoEnvioTS = agora;
+  // 7) Envio da leitura para a API do Movement
+  if (agora - ultimoEnvio >= intervaloEnvio) {
+    ultimoEnvio = agora;
     enviarMovement();
-    if (ENABLE_THINGSPEAK_LEGACY) enviarThingSpeak();
   }
 
   // 8) Pulsos IR

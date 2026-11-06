@@ -39,6 +39,8 @@ Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é
 - As barreiras devem ficar a **15 cm ou mais** uma da outra. Mais perto que isso, uma pessoa corta as duas ao mesmo tempo e o sentido fica ambíguo.
 - No modo automático, o resfriamento só atua com a sala ocupada e a temperatura mais de 0,5 °C acima do alvo. O alvo cai 0,3 °C por pessoa, partindo de 24 °C, entre 18 e 30 °C.
 - O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 30 min.
+  - Os comandos são digitados no monitor serial: `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo.
+  - O ThingSpeak/TalkBack do projeto original foi removido.
 
 Equações lógicas, tabela de estados, contador e circuito do Logisim estão em `docs/eletronica-digital.md`. Cálculos elétricos (Ohm, potência, consumo, RC, energia por envio) e a seção "Montagem real" estão em `docs/fisica.md`.
 
