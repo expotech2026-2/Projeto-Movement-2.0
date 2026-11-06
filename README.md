@@ -228,7 +228,17 @@ Depois do sucesso, ele configura o `backend/.env` e guarda a configuração ante
 
 No pgAdmin, as tabelas ficam em `Servers > Movement > Databases > Movement > Schemas > movement > Tables`; atualize a árvore depois da migração.
 - `database/pgadmin-servers.json` importa os cadastros pelo menu Tools > Import/Export Servers e não contém senhas.
-- `database/consultas.sql` traz consultas de inventário, leituras e médias.
+- `database/consultas.sql` traz consultas para o Query Tool, que funcionam no schema `movement` e no `public` do banco local:
+  - unidades;
+  - inventário por unidade;
+  - dispositivos;
+  - médias mensais;
+  - leituras;
+  - alertas;
+  - usuários;
+  - catálogo por marca.
+
+  Senhas e tokens não aparecem: ficam só como hash.
 
 | Tabela | Conteúdo |
 | --- | --- |
