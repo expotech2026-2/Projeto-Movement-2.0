@@ -6,6 +6,7 @@ import {
   getSessionToken,
   login,
   request,
+  roomAlerts,
   samplingPlan,
 } from "./movementApi";
 import { apiConfig } from "../config/api";
@@ -133,6 +134,15 @@ describe("API Movement", () => {
     });
     expect(fetch).toHaveBeenLastCalledWith(
       `${apiConfig.baseUrl}/rooms/sala-1/sampling-plan?budget_ratio=0.3`,
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
+  it("consulta os alertas recentes da sala", async () => {
+    fetch.mockResolvedValueOnce(new Response("[]", { status: 200 }));
+    await expect(roomAlerts("sala 1")).resolves.toEqual([]);
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala%201/alerts?limit=5`,
       expect.objectContaining({ cache: "no-store" }),
     );
   });

@@ -61,6 +61,8 @@ scripts/              Inicialização e encerramento no Windows
 
 Comentários do código são limitados a uma linha. Credenciais, bancos locais, configurações privadas e dependências instaladas ficam fora do Git.
 
+A arquitetura (C4, UML, padrões Strategy e Observer, SOLID) está em [docs/arquitetura.md](docs/arquitetura.md).
+
 ## Preparar o ambiente
 
 Requisitos: Python 3.12+, Node.js 22.12+ (testado com Node 24), PostgreSQL e pgAdmin 4. Os comandos abaixo são para PowerShell, na raiz do projeto.
