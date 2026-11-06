@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from app.main import create_app
-from app.models import Device, Room
+from app.models import Device, Room, Unit, User
 from app.security import hash_device_token, hash_password
 from app.settings import Settings
 
@@ -64,22 +64,41 @@ def context(database_url):
     app = create_app(settings)
     suffix = uuid4().hex
     room_id = f"room-{suffix}"
+    unit_id = f"unit-{suffix}"
     device_id = f"device-{suffix}"
+    professor = f"prof.{suffix[:12]}"
     token = secrets.token_urlsafe(32)
     with app.state.sessions() as session:
-        session.add(Room(id=room_id, name="Sala de testes"))
+        session.add(Unit(id=unit_id, name=f"Unidade {suffix}"))
+        session.flush()
+        session.add(Room(id=room_id, name="Sala de testes", unit_id=unit_id))
         session.flush()
         session.add(Device(id=device_id, room_id=room_id, token_hash=hash_device_token(token)))
+        session.add(
+            User(
+                username=professor,
+                full_name="Professora de testes",
+                role="professor",
+                password_hash=hash_password("professor-password-1"),
+            )
+        )
         session.commit()
     with TestClient(app) as client:
         login = client.post(
             "/auth/login", json={"username": "admin", "password": "test-password-123"}
         )
         assert login.status_code == 200
+        teacher = client.post(
+            "/auth/login", json={"username": professor, "password": "professor-password-1"}
+        )
+        assert teacher.status_code == 200
         yield {
             "client": client,
             "app": app,
+            "unit": unit_id,
             "room": room_id,
+            "professor": professor,
+            "professor_headers": {"Authorization": f"Bearer {teacher.json()['access_token']}"},
             "device": device_id,
             "device_headers": {"Authorization": f"Bearer {token}"},
             "operator_headers": {"Authorization": f"Bearer {login.json()['access_token']}"},

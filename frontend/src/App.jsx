@@ -6,42 +6,19 @@ import {
   useMemo,
   useState,
 } from "react";
-import { OperatorLogin } from "./components/OperatorLogin";
+import { Icon } from "./components/Icon";
 import { ManagementForm } from "./components/ManagementForms";
-import { AC_KINDS, AC_STATUS } from "./config/catalog";
+import { OperatorLogin } from "./components/OperatorLogin";
+import { ReportsView } from "./components/ReportsView";
+import { UnitsView } from "./components/UnitsView";
+import { UsersView } from "./components/UsersView";
+import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
 import { useRoomFeed } from "./hooks/useRoomFeed";
+import { useTheme } from "./hooks/useTheme";
 import { clearSession, getSessionToken, request } from "./services/movementApi";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
-
-function Icon({ name, size = 20 }) {
-  const paths = {
-    grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
-    room: "M4 21V3h12v18 M16 8h4v13 M1 21h22 M12 11v2",
-    snow: "M12 2v20 M3.34 7l17.32 10 M3.34 17L20.66 7 M8 4l4 4 4-4 M8 20l4-4 4 4",
-    chart: "M3 3v18h18 M7 15l4-5 4 3 5-8",
-    temp: "M9 14V5a3 3 0 016 0v9a5 5 0 11-6 0 M12 8v10",
-    drop: "M12 2C9 7 5 11 5 15a7 7 0 0014 0c0-4-4-8-7-13z",
-    people:
-      "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8 M22 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
-    arrow: "M12 5v14 M5 12l7 7 7-7",
-  };
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={paths[name] || paths.snow} />
-    </svg>
-  );
-}
+const SamplingPlan = lazy(() => import("./components/SamplingPlan"));
 
 const number = (value, decimals = 1) =>
   value == null
@@ -54,6 +31,14 @@ const monthLabel = (value) =>
     month: "long",
     year: "numeric",
   });
+const initials = (name) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 
 function exportCsv(rows, filename) {
   if (!rows.length) return;
@@ -63,7 +48,7 @@ function exportCsv(rows, filename) {
     .map((row) => row.map(quote).join(";"))
     .join("\r\n");
   const url = URL.createObjectURL(
-    new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" }),
+    new Blob(["﻿", csv], { type: "text/csv;charset=utf-8;" }),
   );
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -73,28 +58,75 @@ function exportCsv(rows, filename) {
 }
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(() =>
-    Boolean(getSessionToken()),
+  const [session, setSession] = useState(() =>
+    getSessionToken() ? { user: null } : null,
   );
   useEffect(() => {
-    const expired = () => setAuthenticated(false);
+    const expired = () => setSession(null);
     window.addEventListener("movement:session-expired", expired);
     return () =>
       window.removeEventListener("movement:session-expired", expired);
   }, []);
-  if (!authenticated)
-    return <OperatorLogin onLogin={() => setAuthenticated(true)} />;
+  useEffect(() => {
+    if (!session || session.user) return;
+    let active = true;
+    request("/auth/me")
+      .then((user) => active && setSession({ user }))
+      .catch(() => {
+        if (!active) return;
+        clearSession();
+        setSession(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session]);
+  if (!session)
+    return <OperatorLogin onLogin={(user) => setSession({ user })} />;
+  if (!session.user)
+    return <div className="boot-screen">Carregando seu acesso…</div>;
   return (
     <Workspace
+      user={session.user}
       onLogout={() => {
         clearSession();
-        setAuthenticated(false);
+        setSession(null);
       }}
     />
   );
 }
 
-function Workspace({ onLogout }) {
+const HEADINGS = {
+  overview: [
+    "Cada ambiente, sob controle.",
+    "Acompanhe as condições e organize a climatização dos seus espaços.",
+  ],
+  rooms: [
+    "Unidades e salas",
+    "Cada unidade com suas salas e o inventário de aparelhos de cada uma.",
+  ],
+  history: [
+    "O clima ao longo dos meses",
+    "Consulte as médias de cada sala e acompanhe a evolução do ambiente.",
+  ],
+  reports: [
+    "Relatórios",
+    "Gere documentos em PDF de toda a rede, de uma unidade ou de uma sala.",
+  ],
+  users: [
+    "Usuários e perfis",
+    "Defina quem administra os cadastros e quem apenas consulta.",
+  ],
+};
+const REMOVAL = {
+  unit: "Somente unidades sem salas podem ser excluídas.",
+  room: "Salas com aparelhos, dispositivos ou histórico são preservadas.",
+  appliance: "O aparelho será removido do inventário.",
+};
+
+function Workspace({ user, onLogout }) {
+  const isAdmin = user.role === "admin";
+  const [units, setUnits] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [roomId, setRoomId] = useState("");
   const [tab, setTab] = useState("overview");
@@ -103,77 +135,92 @@ function Workspace({ onLogout }) {
   const [editing, setEditing] = useState(null);
   const [notice, setNotice] = useState("");
   const [credential, setCredential] = useState(null);
-  const [roomsLoading, setRoomsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [theme, toggleTheme] = useTheme();
   const feed = useRoomFeed(roomId, revision);
+  const ordered = useMemo(
+    () =>
+      units.flatMap((unit) => rooms.filter((item) => item.unit_id === unit.id)),
+    [units, rooms],
+  );
   const room = rooms.find((item) => item.id === roomId);
-  const refreshRooms = useCallback(async () => {
-    const result = await request("/rooms");
-    setRooms(result);
+  const unit = units.find((item) => item.id === room?.unit_id);
+  const applyDirectory = useCallback((unitList, roomList) => {
+    const sorted = unitList.flatMap((item) =>
+      roomList.filter((entry) => entry.unit_id === item.id),
+    );
+    setUnits(unitList);
+    setRooms(roomList);
     setRoomId((current) =>
-      result.some((item) => item.id === current)
+      roomList.some((item) => item.id === current)
         ? current
-        : result[0]?.id || "",
+        : sorted[0]?.id || "",
     );
   }, []);
+  const refreshDirectory = useCallback(async () => {
+    const [unitList, roomList] = await Promise.all([
+      request("/units"),
+      request("/rooms"),
+    ]);
+    applyDirectory(unitList, roomList);
+  }, [applyDirectory]);
   useEffect(() => {
     let active = true;
-    request("/rooms")
-      .then((result) => {
-        if (active) {
-          setRooms(result);
-          setRoomId(result[0]?.id || "");
-        }
+    Promise.all([request("/units"), request("/rooms")])
+      .then(([unitList, roomList]) => {
+        if (active) applyDirectory(unitList, roomList);
       })
       .catch((error) => {
         if (active) setNotice(error.message);
       })
       .finally(() => {
-        if (active) setRoomsLoading(false);
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, []);
-  const selectedRooms = rooms.filter((item) =>
-    `${item.name} ${item.location}`
-      .toLocaleLowerCase()
-      .includes(search.toLocaleLowerCase()),
-  );
+  }, [applyDirectory]);
   const base = `/rooms/${encodeURIComponent(roomId)}`;
   async function save(values) {
-    const isRoom = editing.type === "room";
-    const path = isRoom
-      ? `/rooms${editing.item ? `/${editing.item.id}` : ""}`
-      : `${base}/appliances${editing.item ? `/${editing.item.id}` : ""}`;
-    const payload = { ...values };
-    delete payload.id;
-    delete payload.room_id;
-    const result = await request(path, {
-      method: editing.item ? "PUT" : "POST",
-      body: JSON.stringify(payload),
-    });
-    if (isRoom) {
-      await refreshRooms();
+    const { type, item } = editing;
+    const method = item ? "PUT" : "POST";
+    if (type === "unit") {
+      await request(`/units${item ? `/${item.id}` : ""}`, {
+        method,
+        body: JSON.stringify({ name: values.name, address: values.address }),
+      });
+      await refreshDirectory();
+    } else if (type === "room") {
+      const result = await request(`/rooms${item ? `/${item.id}` : ""}`, {
+        method,
+        body: JSON.stringify(values),
+      });
+      await refreshDirectory();
       setRoomId(result.id);
+    } else {
+      const payload = { ...values };
+      delete payload.id;
+      delete payload.room_id;
+      await request(`${base}/appliances${item ? `/${item.id}` : ""}`, {
+        method,
+        body: JSON.stringify(payload),
+      });
     }
     setRevision((value) => value + 1);
     setNotice("Cadastro salvo com sucesso.");
   }
   async function remove(type, item) {
-    if (
-      !window.confirm(
-        `Excluir ${item.name}? ${type === "room" ? "Salas com aparelhos, dispositivos ou histórico são preservadas." : "O aparelho será removido do inventário."}`,
-      )
-    )
-      return;
+    if (!window.confirm(`Excluir ${item.name}? ${REMOVAL[type]}`)) return;
     setBusy(true);
     try {
-      await request(
-        type === "room" ? `/rooms/${item.id}` : `${base}/appliances/${item.id}`,
-        { method: "DELETE" },
-      );
-      if (type === "room") await refreshRooms();
+      const path = {
+        unit: `/units/${item.id}`,
+        room: `/rooms/${item.id}`,
+        appliance: `${base}/appliances/${item.id}`,
+      }[type];
+      await request(path, { method: "DELETE" });
+      if (type !== "appliance") await refreshDirectory();
       setRevision((value) => value + 1);
       setNotice("Cadastro excluído.");
     } catch (error) {
@@ -195,9 +242,15 @@ function Workspace({ onLogout }) {
   }
   const navigation = [
     { id: "overview", icon: "grid", label: "Visão geral" },
-    { id: "rooms", icon: "room", label: "Salas e aparelhos" },
+    { id: "rooms", icon: "building", label: "Unidades e salas" },
     { id: "history", icon: "chart", label: "Histórico mensal" },
+    { id: "reports", icon: "file", label: "Relatórios" },
+    ...(isAdmin ? [{ id: "users", icon: "people", label: "Usuários" }] : []),
   ];
+  const roomScoped = ["overview", "rooms", "history"].includes(tab);
+  const [title, subtitle] = HEADINGS[tab];
+  const newRoom = () =>
+    setEditing(units.length ? { type: "room" } : { type: "unit" });
   return (
     <div className="app-shell">
       <a className="skip-link" href="#content">
@@ -206,7 +259,7 @@ function Workspace({ onLogout }) {
       <aside className="sidebar">
         <a className="brand" href="#content">
           <span className="brand-symbol">
-            <Icon name="snow" size={26} />
+            <img src="/logo.svg" width={42} height={42} alt="" />
           </span>
           <span>
             movement<span className="brand-sub">GESTÃO DE CLIMATIZAÇÃO</span>
@@ -219,7 +272,10 @@ function Workspace({ onLogout }) {
               key={item.id}
               aria-current={tab === item.id ? "page" : undefined}
               className={`nav-item ${tab === item.id ? "active" : ""}`}
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                setTab(item.id);
+                setNotice("");
+              }}
             >
               <Icon name={item.icon} />
               {item.label}
@@ -227,7 +283,9 @@ function Workspace({ onLogout }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="status-dot" /> Monitoramento por sala
+          <span className="status-dot" /> {units.length}{" "}
+          {units.length === 1 ? "unidade" : "unidades"} · {rooms.length}{" "}
+          {rooms.length === 1 ? "sala" : "salas"}
           <p>
             Dados detalhados · 30 dias
             <br />
@@ -244,35 +302,48 @@ function Workspace({ onLogout }) {
             Ambientes <span className="separator">/</span>{" "}
             <strong>{navigation.find((item) => item.id === tab).label}</strong>
           </span>
-          <span className="account">
-            <span className="avatar">OP</span> Operador
+          <span className="topbar-actions">
+            <button
+              className="theme-toggle"
+              onClick={toggleTheme}
+              aria-label={
+                theme === "dark" ? "Usar tema claro" : "Usar tema escuro"
+              }
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
+              <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>
+            </button>
+            <span className="account">
+              <span className="avatar">{initials(user.full_name)}</span>
+              <span className="account-text">
+                {user.full_name}
+                <small className={`role-badge role-badge--${user.role}`}>
+                  {ROLES[user.role]}
+                </small>
+              </span>
+            </span>
           </span>
         </header>
         <main id="content" className="content">
           <div className="page-heading">
             <div>
               <div className="eyebrow">MOVEMENT 2.0</div>
-              <h1>
-                {tab === "overview"
-                  ? "Cada ambiente, sob controle."
-                  : tab === "rooms"
-                    ? "Salas e aparelhos"
-                    : "O clima ao longo dos meses"}
-              </h1>
-              <p>
-                {tab === "overview"
-                  ? "Acompanhe as condições e organize a climatização dos seus espaços."
-                  : tab === "rooms"
-                    ? "Um inventário organizado para cada ambiente."
-                    : "Consulte as médias de cada sala e acompanhe a evolução do ambiente."}
-              </p>
+              <h1>{title}</h1>
+              <p>{subtitle}</p>
             </div>
-            <button
-              className="button primary"
-              onClick={() => setEditing({ type: "room" })}
-            >
-              ＋ Nova sala
-            </button>
+            {isAdmin && !loading && ["overview", "rooms"].includes(tab) && (
+              <div className="heading-actions">
+                <button
+                  className="button secondary"
+                  onClick={() => setEditing({ type: "unit" })}
+                >
+                  ＋ Nova unidade
+                </button>
+                <button className="button primary" onClick={newRoom}>
+                  ＋ Nova sala
+                </button>
+              </div>
+            )}
           </div>
           {notice && (
             <div className="notice" role="status">
@@ -285,193 +356,112 @@ function Workspace({ onLogout }) {
               </button>
             </div>
           )}
-          {feed.error && (
+          {roomScoped && feed.error && (
             <div className="notice error" role="alert">
               Falha na atualização: {feed.error}. Nova tentativa em 15 segundos.
             </div>
           )}
-          <div className="room-toolbar">
-            <label className="room-selector">
-              <Icon name="room" /> Sala selecionada
-              <select
-                aria-label="Sala selecionada"
-                value={roomId}
-                onChange={(event) => {
-                  setRoomId(event.target.value);
+          {roomScoped && rooms.length > 0 && (
+            <div className="room-toolbar">
+              <label className="room-selector">
+                <Icon name="room" /> Sala selecionada
+                <select
+                  aria-label="Sala selecionada"
+                  value={roomId}
+                  onChange={(event) => {
+                    setRoomId(event.target.value);
+                    setCredential(null);
+                  }}
+                >
+                  {units.map((item) => {
+                    const unitRooms = ordered.filter(
+                      (entry) => entry.unit_id === item.id,
+                    );
+                    return unitRooms.length ? (
+                      <optgroup key={item.id} label={item.name}>
+                        {unitRooms.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {entry.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null;
+                  })}
+                </select>
+              </label>
+              <span className="muted">
+                <strong className="unit-chip">{unit?.name}</strong>
+                {room?.location && ` · ${room.location}`}
+                {room && ` · Até ${room.capacity} pessoas`}
+              </span>
+            </div>
+          )}
+          {loading ? (
+            <div className="empty-state">Carregando unidades e salas…</div>
+          ) : tab === "reports" ? (
+            <ReportsView units={units} rooms={ordered} roomId={roomId} />
+          ) : tab === "users" && isAdmin ? (
+            <UsersView currentUser={user} onNotice={setNotice} />
+          ) : tab === "rooms" ? (
+            <>
+              <UnitsView
+                units={units}
+                rooms={ordered}
+                roomId={roomId}
+                search={search}
+                onSearch={setSearch}
+                isAdmin={isAdmin}
+                busy={busy}
+                onSelect={(id) => {
+                  setRoomId(id);
                   setCredential(null);
                 }}
-              >
-                {!rooms.length && (
-                  <option value="">Nenhuma sala cadastrada</option>
-                )}
-                {rooms.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="muted">
-              {room?.location || "Localização não informada"}
-              {room && ` · Até ${room.capacity} pessoas`}
-            </span>
-          </div>
-          {roomsLoading ? (
-            <div className="empty-state">Carregando salas…</div>
-          ) : !rooms.length ? (
-            <div className="empty-state">
-              <Icon name="room" size={36} />
-              <h2>Seu primeiro ambiente começa aqui</h2>
-              <p>
-                Cadastre uma sala e adicione os aparelhos de ar-condicionado.
-              </p>
-              <button
-                className="button primary"
-                onClick={() => setEditing({ type: "room" })}
-              >
-                Cadastrar primeira sala
-              </button>
-            </div>
-          ) : (
-            <>
-              {tab === "overview" && (
-                <Overview
-                  feed={feed}
+                onEdit={setEditing}
+                onRemove={remove}
+              />
+              {room && (
+                <RoomInventory
                   room={room}
-                  onManage={() => setTab("rooms")}
+                  unit={unit}
+                  feed={feed}
+                  isAdmin={isAdmin}
+                  busy={busy}
+                  credential={credential}
+                  onAdd={() => setEditing({ type: "appliance" })}
+                  onEdit={(item) => setEditing({ type: "appliance", item })}
+                  onRemove={(item) => remove("appliance", item)}
+                  onProvision={provision}
+                  onDismissCredential={() => setCredential(null)}
                 />
               )}
-              {tab === "rooms" && (
-                <>
-                  <div className="section-heading">
-                    <h2>
-                      Seus ambientes{" "}
-                      <span className="count">{rooms.length}</span>
-                    </h2>
-                    <input
-                      className="search"
-                      aria-label="Buscar sala"
-                      placeholder="Buscar sala ou localização…"
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                    />
-                  </div>
-                  <div className="room-grid">
-                    {selectedRooms.map((item) => (
-                      <article
-                        key={item.id}
-                        className={`room-card ${item.id === roomId ? "selected" : ""}`}
-                      >
-                        <div className="room-card-top">
-                          <span className="tile-icon">
-                            <Icon name="room" />
-                          </span>
-                          <span className="muted">{item.capacity} pessoas</span>
-                        </div>
-                        <h3>{item.name}</h3>
-                        <p>{item.location || "Sem localização"}</p>
-                        <div className="card-actions">
-                          <button
-                            onClick={() => {
-                              setRoomId(item.id);
-                              setCredential(null);
-                            }}
-                          >
-                            Selecionar →
-                          </button>
-                          <button
-                            aria-label={`Editar ${item.name}`}
-                            onClick={() => setEditing({ type: "room", item })}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="danger"
-                            disabled={busy}
-                            aria-label={`Excluir ${item.name}`}
-                            onClick={() => remove("room", item)}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                  {!selectedRooms.length && (
-                    <p className="empty-state">
-                      Nenhuma sala corresponde à busca.
-                    </p>
-                  )}
-                  <div className="section-heading">
-                    <div>
-                      <h2>Aparelhos · {room?.name}</h2>
-                      <p className="muted">
-                        O status representa o cadastro operacional do aparelho.
-                      </p>
-                    </div>
-                    <button
-                      className="button secondary"
-                      disabled={feed.loading}
-                      onClick={() => setEditing({ type: "appliance" })}
-                    >
-                      ＋ Adicionar aparelho
-                    </button>
-                  </div>
-                  <Appliances
-                    items={feed.appliances}
-                    loading={feed.loading}
-                    onEdit={(item) => setEditing({ type: "appliance", item })}
-                    onRemove={(item) => remove("appliance", item)}
-                    busy={busy}
-                  />
-                  <section className="panel device-panel">
-                    <div>
-                      <h2>Conexão com o sensor</h2>
-                      <p>
-                        {feed.devices[0]
-                          ? `Dispositivo vinculado: ${feed.devices[0].id}`
-                          : "Vincule um ESP32 para receber as medições desta sala."}
-                      </p>
-                    </div>
-                    <button
-                      className="button secondary"
-                      disabled={
-                        busy || feed.loading || Boolean(feed.devices.length)
-                      }
-                      onClick={provision}
-                    >
-                      {feed.devices.length
-                        ? "Dispositivo cadastrado"
-                        : "Cadastrar dispositivo"}
-                    </button>
-                  </section>
-                  {credential && (
-                    <div className="notice credential">
-                      <strong>
-                        Guarde a credencial do dispositivo. O token é exibido
-                        apenas agora.
-                      </strong>
-                      <p>ID: {credential.id}</p>
-                      <label>
-                        Token
-                        <input
-                          readOnly
-                          value={credential.token}
-                          onFocus={(event) => event.target.select()}
-                        />
-                      </label>
-                      <button
-                        className="button secondary"
-                        onClick={() => setCredential(null)}
-                      >
-                        Já guardei
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-              {tab === "history" && <MonthlyHistory feed={feed} room={room} />}
             </>
+          ) : !rooms.length ? (
+            <div className="empty-state">
+              <Icon name="building" size={36} />
+              <h2>Seu primeiro ambiente começa aqui</h2>
+              <p>
+                {isAdmin
+                  ? "Cadastre uma unidade, como Centro ou Polo Sede, e depois as salas e os aparelhos de cada uma."
+                  : "Nenhuma sala cadastrada ainda. Peça a um administrador para cadastrar unidades e salas."}
+              </p>
+              {isAdmin && (
+                <button className="button primary" onClick={newRoom}>
+                  {units.length
+                    ? "Cadastrar primeira sala"
+                    : "Cadastrar primeira unidade"}
+                </button>
+              )}
+            </div>
+          ) : tab === "overview" ? (
+            <Overview
+              feed={feed}
+              room={room}
+              unit={unit}
+              isAdmin={isAdmin}
+              onManage={() => setTab("rooms")}
+            />
+          ) : (
+            <MonthlyHistory feed={feed} room={room} />
           )}
           <footer>
             Movement <span>Organização hoje. Ambientes melhores amanhã.</span>
@@ -481,8 +471,9 @@ function Workspace({ onLogout }) {
       </div>
       {editing && (
         <ManagementForm
-          key={`${editing.type}-${editing.item?.id || "new"}-${roomId}`}
+          key={`${editing.type}-${editing.item?.id || editing.unitId || "new"}-${roomId}`}
           editing={editing}
+          units={units}
           onSave={save}
           onClose={() => setEditing(null)}
         />
@@ -491,7 +482,96 @@ function Workspace({ onLogout }) {
   );
 }
 
-function Overview({ feed, room, onManage }) {
+function RoomInventory({
+  room,
+  unit,
+  feed,
+  isAdmin,
+  busy,
+  credential,
+  onAdd,
+  onEdit,
+  onRemove,
+  onProvision,
+  onDismissCredential,
+}) {
+  return (
+    <>
+      <div className="section-heading inventory-heading">
+        <div>
+          <h2>
+            Aparelhos · {room.name}
+            <span className="unit-chip">{unit?.name}</span>
+          </h2>
+          <p className="muted">
+            O status representa o cadastro operacional do aparelho.
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            className="button secondary"
+            disabled={feed.loading}
+            onClick={onAdd}
+          >
+            ＋ Adicionar aparelho
+          </button>
+        )}
+      </div>
+      <Appliances
+        items={feed.appliances}
+        loading={feed.loading}
+        isAdmin={isAdmin}
+        onEdit={onEdit}
+        onRemove={onRemove}
+        busy={busy}
+      />
+      <section className="panel device-panel">
+        <div>
+          <h2>Conexão com o sensor</h2>
+          <p>
+            {feed.devices[0]
+              ? `Dispositivo vinculado: ${feed.devices[0].id}`
+              : isAdmin
+                ? "Vincule um ESP32 para receber as medições desta sala."
+                : "Nenhum sensor vinculado a esta sala."}
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            className="button secondary"
+            disabled={busy || feed.loading || Boolean(feed.devices.length)}
+            onClick={onProvision}
+          >
+            {feed.devices.length
+              ? "Dispositivo cadastrado"
+              : "Cadastrar dispositivo"}
+          </button>
+        )}
+      </section>
+      {credential && (
+        <div className="notice credential">
+          <strong>
+            Guarde a credencial do dispositivo. O token é exibido apenas agora.
+          </strong>
+          <p>ID: {credential.id}</p>
+          <label>
+            Token
+            <input
+              readOnly
+              value={credential.token}
+              onFocus={(event) => event.target.select()}
+            />
+          </label>
+          <button className="button secondary" onClick={onDismissCredential}>
+            Já guardei
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Overview({ feed, room, unit, isAdmin, onManage }) {
   const [period, setPeriod] = useState("24");
   const reading = feed.latest?.reading;
   const points = useMemo(
@@ -522,7 +602,7 @@ function Overview({ feed, room, onManage }) {
       detail: reading
         ? `Externa: ${number(reading.temp_outside)} °C`
         : "Aguardando sensor",
-      color: "teal",
+      color: "amber",
     },
     {
       icon: "drop",
@@ -548,14 +628,15 @@ function Overview({ feed, room, onManage }) {
       value: feed.loading ? "—" : feed.appliances.length,
       unit: "unidades",
       detail: `${feed.appliances.filter((item) => item.status === "manutencao").length} em manutenção`,
-      color: "amber",
+      color: "teal",
     },
   ];
   return (
     <>
       <div className="section-heading">
         <h2>
-          {room?.name}{" "}
+          {room?.name}
+          <span className="unit-chip">{unit?.name}</span>
           <span
             className={`badge ${feed.latest?.is_stale || feed.error ? "warning" : "success"}`}
           >
@@ -636,12 +717,19 @@ function Overview({ feed, room, onManage }) {
           </div>
         )}
       </section>
+      {room?.id && (
+        <Suspense
+          fallback={<p className="muted">Carregando plano de leitura…</p>}
+        >
+          <SamplingPlan roomId={room.id} />
+        </Suspense>
+      )}
       <div className="overview-bottom">
         <section className="panel">
           <div className="section-heading">
             <h2>Inventário da sala</h2>
             <button className="text-button" onClick={onManage}>
-              Gerenciar →
+              {isAdmin ? "Gerenciar →" : "Ver inventário →"}
             </button>
           </div>
           {feed.appliances.length ? (
@@ -653,7 +741,10 @@ function Overview({ feed, room, onManage }) {
                 <div>
                   <strong>{item.name}</strong>
                   <small>
-                    {AC_KINDS[item.kind]} · {number(item.capacity_btu, 0)} BTU/h
+                    {[AC_KINDS[item.kind], item.brand, item.model]
+                      .filter(Boolean)
+                      .join(" · ")}{" "}
+                    · {number(item.capacity_btu, 0)} BTU/h
                     {item.inverter ? " · Inverter" : ""}
                   </small>
                 </div>
@@ -697,14 +788,18 @@ function Overview({ feed, room, onManage }) {
   );
 }
 
-function Appliances({ items, loading, onEdit, onRemove, busy }) {
+function Appliances({ items, loading, isAdmin, onEdit, onRemove, busy }) {
   if (loading) return <div className="empty-state">Carregando aparelhos…</div>;
   if (!items.length)
     return (
       <div className="empty-state">
         <Icon name="snow" size={32} />
         <h3>Nenhum aparelho nesta sala</h3>
-        <p>Adicione os equipamentos para organizar seu inventário.</p>
+        <p>
+          {isAdmin
+            ? "Adicione os equipamentos escolhendo marca e modelo do catálogo do Inmetro."
+            : "Os aparelhos cadastrados pelos administradores aparecerão aqui."}
+        </p>
       </div>
     );
   return (
@@ -717,7 +812,7 @@ function Appliances({ items, loading, onEdit, onRemove, busy }) {
             <th>Capacidade</th>
             <th>Tecnologia</th>
             <th>Situação</th>
-            <th>Ações</th>
+            {isAdmin && <th>Ações</th>}
           </tr>
         </thead>
         <tbody>
@@ -740,18 +835,20 @@ function Appliances({ items, loading, onEdit, onRemove, busy }) {
                   {AC_STATUS[item.status]}
                 </span>
               </td>
-              <td>
-                <button className="text-button" onClick={() => onEdit(item)}>
-                  Editar
-                </button>
-                <button
-                  className="text-button danger"
-                  disabled={busy}
-                  onClick={() => onRemove(item)}
-                >
-                  Excluir
-                </button>
-              </td>
+              {isAdmin && (
+                <td>
+                  <button className="text-button" onClick={() => onEdit(item)}>
+                    Editar
+                  </button>
+                  <button
+                    className="text-button danger"
+                    disabled={busy}
+                    onClick={() => onRemove(item)}
+                  >
+                    Excluir
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

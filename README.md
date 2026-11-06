@@ -4,17 +4,47 @@ Gestão de salas e aparelhos de ar-condicionado, baseada no Projeto Integrador e
 
 ## Funcionalidades
 
-- Login e saída do operador, com sessão assinada e expiração.
-- Cadastro, busca, seleção, edição e exclusão de salas vazias.
+- Login com dois perfis: Administrador e Professor, com sessão assinada e expiração.
+- Unidades (por exemplo, Centro e Polo Sede), cada uma com suas salas.
+- Cadastro, busca, seleção, edição e exclusão de unidades e salas vazias.
 - Vários aparelhos por sala: Split, Janela, Cassete, Piso-teto, Portátil e VRF/VRV.
-- Nome, marca, modelo, capacidade em BTU/h, inverter e situação de cada aparelho.
+- Catálogo do Inmetro com marcas e modelos registrados no Brasil; o modelo escolhido preenche tipo, BTU/h e inverter.
+- Relatório em PDF de todas as unidades, de uma unidade ou de uma sala.
+- Tema escuro com a logo do projeto e opção de tema claro.
 - Cadastro autenticado de dispositivo ESP32 por sala, com token exibido uma única vez.
 - Telemetria por dispositivo, sem aceitar uma sala informada pelo cliente.
 - Painel com temperatura, umidade, ocupação, inventário e gráfico por período.
 - Histórico mensal por sala e exportação CSV; atualização automática a cada 15 segundos.
+- Plano de leitura do ESP32 otimizado por programação linear inteira: intervalo de envio por hora, economia de energia e análise de sensibilidade ([docs/pesquisa-operacional.md](docs/pesquisa-operacional.md)).
 - Migrações, autenticação, validação, CORS restrito e proteção de salas com dados vinculados.
 
 O status do inventário indica a situação cadastral do equipamento. O estado ligado/desligado vem da telemetria do sensor da sala. Esta versão não envia comandos físicos de ligar/desligar pelo site.
+
+## Unidades, perfis e catálogo
+
+As salas pertencem a uma unidade: `Centro → Sala 101, Sala 102…`, `Polo Sede → Auditório…`. Uma unidade só pode ser excluída depois que suas salas forem movidas ou excluídas. Na migração de uma base existente, cada localização já informada nas salas vira uma unidade, e as salas sem localização vão para a "Unidade principal".
+
+| Ação | Administrador | Professor |
+| --- | --- | --- |
+| Consultar unidades, salas, aparelhos, leituras e histórico | Sim | Sim |
+| Gerar relatórios em PDF | Sim | Sim |
+| Cadastrar, editar e excluir unidades, salas e aparelhos | Sim | Não |
+| Cadastrar sensores ESP32 | Sim | Não |
+| Gerenciar usuários | Sim | Não |
+
+O login definido em `backend/.env` (`MOVEMENT_OPERATOR_USERNAME`) continua sendo o administrador principal. Os demais administradores e professores são cadastrados na tela Usuários, com senha de pelo menos 12 caracteres. Desativar um usuário ou trocar a senha dele encerra as sessões abertas.
+
+O catálogo vem da tabela de eficiência energética de condicionadores de ar do Programa Brasileiro de Etiquetagem (Inmetro), atualizada em 31/12/2025: 1.507 modelos de 52 marcas, com tipo, BTU/h, tecnologia, classe e número de registro. Ele fica em `backend/app/data/inmetro_condicionadores.csv` e é carregado pela migração. Portáteis e VRF/VRV não constam dessa tabela e são preenchidos manualmente. Em quatro modelos, a capacidade publicada estava sem os milhares ou trocada com a coluna em watts e foi corrigida; esses casos têm `corrected=1` no CSV.
+
+Para atualizar o catálogo com uma nova tabela do Inmetro, baixe o PDF de 28 colunas e, na pasta `backend`, execute:
+
+```powershell
+..\.venv\Scripts\python.exe -m pip install pdfplumber
+..\.venv\Scripts\python.exe scripts\inmetro_catalog.py TABELA.pdf app\data\inmetro_condicionadores.csv
+..\.venv\Scripts\python.exe -m app.cli catalog-import
+```
+
+O `pdfplumber` é usado apenas por esse conversor e não faz parte do `requirements.lock`. O relatório PDF usa o `reportlab`, incluído no `requirements.lock`.
 
 ## Organização
 
@@ -24,6 +54,7 @@ backend/app/          FastAPI, modelos, serviços e retenção
 backend/migrations/   Migrações Alembic
 backend/tests/        Testes com PostgreSQL separado
 database/             Consultas e importação de servidores no pgAdmin
+docs/                 Documentação dos requisitos da ExpoTech (física, pesquisa operacional, arquitetura, eletrônica)
 firmware/             ESP32 do projeto original com envio para FastAPI
 scripts/              Inicialização e encerramento no Windows
 ```
@@ -59,6 +90,62 @@ No pgAdmin: `Servers > Movement > Databases > Movement > Schemas > movement > Ta
 
 `database/pgadmin-servers.json` permite importar os cadastros pelo menu Tools > Import/Export Servers. Não contém senhas. `database/consultas.sql` contém consultas de inventário, leituras e médias.
 
+## Banco gerenciado no Supabase
+
+O banco em nuvem é o projeto Supabase "Movement" (`ifirpelguapcdszegqqm`, região `us-west-2`, PostgreSQL 17). As tabelas ficam no schema `movement`. O schema `public` fica vazio porque o Supabase o expõe pela API REST com a chave anônima.
+
+A conexão usa o Session pooler, `aws-1-us-west-2.pooler.supabase.com:5432`, que aceita IPv4. A conexão direta `db.ifirpelguapcdszegqqm.supabase.co` só tem IPv6, e o Transaction pooler (porta 6543) não preserva configurações de sessão entre transações; por isso nenhum dos dois é usado.
+
+Para aplicar as migrações e gerar a configuração, na pasta `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m app.configure_existing --url "postgresql://postgres.ifirpelguapcdszegqqm@aws-1-us-west-2.pooler.supabase.com:5432/postgres" --env-file .env.supabase
+```
+
+O comando solicita a senha do banco (Project Settings > Database) e, na primeira execução, cria a senha do administrador. Para conexões remotas, o padrão é `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`. Use `sslrootcert` com o caminho do certificado da CA do provedor se ele não estiver no repositório de CAs confiáveis do cliente.
+
+O resultado fica em `backend/.env.supabase`, fora do Git. O comando aceita apenas `.env` ou `.env.<nome>` em `backend/`, com permissões privadas também para o backup. Ao reconfigurar um arquivo, ele mantém o login que já está gravado ali. Como o pooler ignora o `search_path` da URL, a API define o schema em cada conexão a partir de `MOVEMENT_DATABASE_SCHEMA=movement`.
+
+Para executar a API local com o banco do Supabase, na pasta `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --env-file .env.supabase --host 127.0.0.1 --port 8000
+```
+
+As variáveis do arquivo informado têm prioridade sobre `backend/.env`. Em produção, os mesmos valores vão para as variáveis de ambiente do Azure (veja a próxima seção). O painel de segurança do Supabase (Advisors) não aponta alertas para esta configuração.
+
+## Deploy no Azure
+
+A produção roda no Azure App Service (Linux, contêiner), com a imagem publicada no Azure Container Registry. O `Dockerfile` da raiz gera um único contêiner: `app.site:create_site` serve o site em `/` e a API em `/api`, o mesmo caminho usado pelo proxy do Vite. Ao iniciar, o contêiner aplica as migrações pendentes no Supabase.
+
+O trabalho é feito em branches `feat/<número>-<descrição>` ou `fix/<número>-<descrição>`, entra na `Devlop` por pull request para teste e só depois segue para a `main`. Em todas as branches a pipeline executa lint, testes, build do frontend e build da imagem. Somente um push na `main` publica `movement:latest` no registro, e o App Service se atualiza com essa imagem.
+
+Configuração inicial, feita uma única vez:
+
+1. Ative a assinatura Azure for Students em <https://azure.microsoft.com/free/students> com o e-mail da faculdade.
+2. No portal, crie um **Container Registry**, plano Basic, num grupo de recursos `movement`. Prefira a região West US 2, próxima do Supabase; se a assinatura não a permitir, use uma das regiões liberadas. Em Settings > Access keys, habilite **Admin user**.
+3. Cadastre no GitHub o endereço do registro e as credenciais do Admin user. Os valores dos segredos são solicitados no terminal:
+
+```powershell
+gh variable set ACR_LOGIN_SERVER --repo expotech2026-2/Projeto-Movement-2.0 --body NOME-DO-REGISTRO.azurecr.io
+gh secret set ACR_USERNAME --repo expotech2026-2/Projeto-Movement-2.0
+gh secret set ACR_PASSWORD --repo expotech2026-2/Projeto-Movement-2.0
+```
+
+4. Faça o merge da `Devlop` na `main`, ou execute de novo a pipeline da `main`, para publicar a primeira imagem.
+5. Crie um **Web App**: Publish **Container**, sistema **Linux**, mesma região do registro, plano Free F1 se estiver disponível para contêiner, ou Basic B1. Na aba Container, escolha Azure Container Registry, o registro, a imagem `movement` e a tag `latest`.
+6. Na pasta `backend`, gere as variáveis de ambiente a partir de `backend/.env.supabase`:
+
+```powershell
+..\.venv\Scripts\python.exe scripts\azure_settings.py https://NOME-DO-APP.azurewebsites.net
+```
+
+7. Copie o conteúdo de `backend/.env.azure.json` (fora do Git) para Web App > Settings > Environment variables > Advanced edit e aplique. O arquivo inclui `WEBSITES_PORT=8000` e limita o CORS ao endereço publicado.
+8. Em Deployment Center, ative **Continuous deployment**, para que cada nova imagem `latest` reinicie o app. Em Monitoring > Health check, informe `/api/health`.
+9. Confira `https://NOME-DO-APP.azurewebsites.net/api/ready`. A documentação interativa fica em `/api/docs`.
+
+O registro Basic e o plano B1 consomem os créditos da assinatura de estudante; o plano F1 não tem custo, mas hiberna sem uso e limita o tempo de CPU diário. No firmware, use `https://NOME-DO-APP.azurewebsites.net/api/telemetry` em `MOVEMENT_API_URL` e o certificado raiz do domínio em `MOVEMENT_CA_CERT`.
+
 ## Desenvolvimento local separado
 
 Para experimentar sem acessar o banco existente:
@@ -92,7 +179,7 @@ Alternativamente, execute a API em um terminal na pasta `backend` e o frontend e
 npm.cmd run dev
 ```
 
-O frontend usa `/api` e o proxy do Vite durante o desenvolvimento. Em produção, configure um proxy reverso que encaminhe `/api` ao FastAPI, removendo esse prefixo; sirva `frontend/dist` como arquivos estáticos e use HTTPS. `vite preview` apenas serve o build e não substitui esse proxy.
+O frontend usa `/api` e o proxy do Vite durante o desenvolvimento. Em produção, o contêiner descrito em "Deploy no Azure" serve o build e a API no mesmo endereço, com HTTPS fornecido pelo App Service. `vite preview` apenas serve o build e não substitui esse proxy.
 
 ## Regras de retenção
 

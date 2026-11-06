@@ -24,13 +24,64 @@ class Base(DeclarativeBase):
     pass
 
 
+DEFAULT_UNIT_ID = "unidade-principal"
+DEFAULT_UNIT_NAME = "Unidade principal"
+
+
+class Unit(Base):
+    __tablename__ = "units"
+    __table_args__ = (UniqueConstraint("name", name="uq_units_name"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    address: Mapped[str] = mapped_column(String(160), default="", server_default="")
+
+
 class Room(Base):
     __tablename__ = "rooms"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    unit_id: Mapped[str] = mapped_column(ForeignKey("units.id"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     location: Mapped[str] = mapped_column(String(120), default="", server_default="")
     capacity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     __table_args__ = (CheckConstraint("capacity BETWEEN 1 AND 10000", name="ck_room_capacity"),)
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("username", name="uq_users_username"),
+        CheckConstraint("role IN ('admin', 'professor')", name="ck_user_role"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    username: Mapped[str] = mapped_column(String(60))
+    full_name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(20))
+    password_hash: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    session_version: Mapped[int] = mapped_column(Integer, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CatalogModel(Base):
+    __tablename__ = "ac_catalog"
+    # Modelos da tabela PBE do Inmetro; recarregados por "movement catalog-import".
+    __table_args__ = (Index("ix_ac_catalog_brand_kind", "brand", "kind"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    brand: Mapped[str] = mapped_column(String(80))
+    model: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20))
+    indoor_unit: Mapped[str] = mapped_column(String(80))
+    outdoor_unit: Mapped[str] = mapped_column(String(80))
+    function: Mapped[str] = mapped_column(String(20))
+    voltage: Mapped[str] = mapped_column(String(40))
+    inverter: Mapped[bool] = mapped_column(Boolean)
+    refrigerant: Mapped[str] = mapped_column(String(20))
+    capacity_btu: Mapped[int] = mapped_column(Integer)
+    idrs: Mapped[float | None] = mapped_column(Float)
+    annual_kwh: Mapped[float | None] = mapped_column(Float)
+    energy_class: Mapped[str] = mapped_column(String(2))
+    registration: Mapped[str] = mapped_column(String(20))
+    corrected: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class AirConditioner(Base):

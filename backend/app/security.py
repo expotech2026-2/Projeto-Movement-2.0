@@ -35,15 +35,32 @@ def session_serializer(settings: Settings) -> URLSafeTimedSerializer:
     )
 
 
-def issue_session(settings: Settings) -> str:
+def password_fingerprint(password_hash: str) -> str:
+    # Trocar a senha altera a impressão e invalida as sessões emitidas antes.
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def issue_session(
+    settings: Settings,
+    *,
+    username: str,
+    user_id: str | None,
+    password_hash: str,
+    session_version: int = 0,
+) -> str:
     return session_serializer(settings).dumps(
-        {"sub": settings.operator_username, "role": "operator"}
+        {
+            "sub": username,
+            "uid": user_id,
+            "pv": password_fingerprint(password_hash),
+            "sv": session_version,
+        }
     )
 
 
-def valid_session(token: str, settings: Settings) -> bool:
+def read_session(token: str, settings: Settings) -> dict | None:
     try:
         payload = session_serializer(settings).loads(token, max_age=settings.session_ttl_seconds)
-        return payload == {"sub": settings.operator_username, "role": "operator"}
     except (BadSignature, SignatureExpired):
-        return False
+        return None
+    return payload if isinstance(payload, dict) and isinstance(payload.get("sub"), str) else None

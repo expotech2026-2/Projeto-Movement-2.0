@@ -29,12 +29,15 @@ String movementPendingPayload;
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinEntrada  = 13;
-const int pinSaida    = 12;
+const int pinSaida    = 26;    // GPIO 12 é pino de partida; ver docs/fisica.md, seção 9.5
 const int pinLED_IR   = 2;     // LED simula pulso IR enviado ao AC
 
 #define DHTPIN_EXTERNO 14
 #define DHTPIN_INTERNO 27
-#define DHTTYPE        DHT22
+#ifndef MOVEMENT_DHT_TYPE
+#define MOVEMENT_DHT_TYPE DHT22   // modelo do Wokwi; a montagem real usa DHT11 (config.h)
+#endif
+#define DHTTYPE        MOVEMENT_DHT_TYPE
 DHT dhtExterno(DHTPIN_EXTERNO, DHTTYPE);
 DHT dhtInterno(DHTPIN_INTERNO, DHTTYPE);
 
@@ -86,11 +89,13 @@ unsigned long ultimoCalculoCalor = 0;
 unsigned long ultimoResfriamento = 0;
 unsigned long ultimoEnvioTS      = 0;
 unsigned long ultimaConsultaTB   = 0;
+unsigned long ultimaConsultaPlano = 0;
 const unsigned long intervaloDHT      = 2000;
 const unsigned long intervaloCalor    = 10000;
 const unsigned long intervaloResfr    = 1000;
-const unsigned long intervaloEnvioTS  = 16000; // respeita limite de 15s
+unsigned long intervaloEnvio          = 16000; // ajustado pelo plano otimizado da API (15 a 300 s)
 const unsigned long intervaloTalkBack = 15000; // checa fila a cada 15s
+const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cada 15 min
 
 // ── Pulso IR (LED) ─────────────────────────────────────────────────────────
 bool          pulsoAtivo      = false;
@@ -105,8 +110,8 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  pinMode(pinEntrada, INPUT);
-  pinMode(pinSaida,   INPUT);
+  pinMode(pinEntrada, INPUT_PULLUP);   // contato do relé da barreira entre o pino e o GND
+  pinMode(pinSaida,   INPUT_PULLUP);
   pinMode(pinLED_IR,  OUTPUT);
   digitalWrite(pinLED_IR, LOW);
 
@@ -116,6 +121,8 @@ void setup() {
   Serial.println(F("\n=== SMART AC CONTROLLER (Auto + Manual) ==="));
   conectarWiFi();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  atualizarIntervalo();
+  ultimaConsultaPlano = millis();
   Serial.println(F("Sistema pronto. Modo inicial: AUTOMATICO\n"));
 }
 
@@ -382,6 +389,16 @@ String movementMessageId() {
   return String(value);
 }
 
+// Abre HTTP ou HTTPS (com o certificado de MOVEMENT_CA_CERT) para a URL informada.
+bool abrirMovement(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure, const String& url) {
+  if (url.startsWith("https://")) {
+    if (String(MOVEMENT_CA_CERT).isEmpty()) return false;
+    secure.setCACert(MOVEMENT_CA_CERT);
+    return http.begin(secure, url);
+  }
+  return http.begin(plain, url);
+}
+
 void enviarMovement() {
   if (WiFi.status() != WL_CONNECTED) { conectarWiFi(); return; }
   if (primeiraLeitura || String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
@@ -405,20 +422,41 @@ void enviarMovement() {
   HTTPClient http;
   WiFiClient plainClient;
   WiFiClientSecure secureClient;
-  String url = MOVEMENT_API_URL;
-  if (url.startsWith("https://")) {
-    if (String(MOVEMENT_CA_CERT).isEmpty()) return;
-    secureClient.setCACert(MOVEMENT_CA_CERT);
-    if (!http.begin(secureClient, url)) return;
-  } else {
-    if (!http.begin(plainClient, url)) return;
-  }
+  if (!abrirMovement(http, plainClient, secureClient, MOVEMENT_API_URL)) return;
   http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
-  Serial.printf("[Movement] HTTP %d\n", code);
+  Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
   if (code == 200 || code == 201 || code == 422) movementPendingPayload = "";
+  http.end();
+}
+
+// Consulta na API o intervalo de envio otimizado para a hora atual (Pesquisa Operacional).
+void atualizarIntervalo() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
+  String url = MOVEMENT_API_URL;
+  url.replace("/telemetry", "/devices/me/sampling-interval");
+  HTTPClient http;
+  WiFiClient plainClient;
+  WiFiClientSecure secureClient;
+  if (!abrirMovement(http, plainClient, secureClient, url)) return;
+  http.setTimeout(5000);
+  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  int code = http.GET();
+  if (code == 200) {
+    String body = http.getString();
+    int inicio = body.indexOf("\"interval_seconds\":");
+    long segundos = inicio >= 0 ? body.substring(inicio + 19).toInt() : 0;
+    if (segundos > 0) {
+      intervaloEnvio = constrain((unsigned long)segundos * 1000UL, 15000UL, 300000UL);
+      Serial.printf("[Movement] intervalo de envio: %lu s\n", intervaloEnvio / 1000);
+    }
+  } else {
+    Serial.printf("[Movement] plano indisponivel (HTTP %d); mantendo %lu s\n", code, intervaloEnvio / 1000);
+  }
   http.end();
 }
 
@@ -494,8 +532,14 @@ void loop() {
   // 6) Timeout do modo manual
   verificarTimeoutManual();
 
+  // 6b) Plano de leitura otimizado
+  if (agora - ultimaConsultaPlano >= intervaloConsultaPlano) {
+    ultimaConsultaPlano = agora;
+    atualizarIntervalo();
+  }
+
   // 7) Envio ThingSpeak
-  if (agora - ultimoEnvioTS >= intervaloEnvioTS) {
+  if (agora - ultimoEnvioTS >= intervaloEnvio) {
     ultimoEnvioTS = agora;
     enviarMovement();
     if (ENABLE_THINGSPEAK_LEGACY) enviarThingSpeak();
