@@ -61,7 +61,7 @@ Tensões entre 0,83 V e 2,48 V são indefinidas; por isso os sensores precisam t
 
 ## 4. Pull-up do DHT22 (sinal e constante RC)
 
-A linha de dados do DHT22 é de **dreno aberto**: o sensor só consegue puxá-la para 0, e um resistor de pull-up a devolve para 1. O datasheet recomenda cerca de 5 kΩ para cabos de até 20 m; 4,7 kΩ e 10 kΩ são valores comerciais usuais. Com o caso mais lento, 10 kΩ:
+A linha de dados do DHT22 é de **dreno aberto**: o sensor só consegue puxá-la para 0, e um resistor de pull-up a devolve para 1. Os manuais da Aosong indicam um pull-up da ordem de 5 kΩ: o do DHT11 (V1.3) recomenda 4,7 kΩ para cabos de até 5 m, no lugar dos 5,1 kΩ das versões antigas. 4,7 kΩ e 10 kΩ são valores comerciais usuais. Com o caso mais lento, 10 kΩ:
 
 - Corrente com a linha em 0:
 
@@ -85,13 +85,18 @@ Potência de cada parte, com $P = V \cdot I$ e correntes típicas de datasheet:
 
 | Componente | Tensão | Corrente típica | Potência |
 | --- | --- | --- | --- |
-| ESP32 com Wi-Fi conectado, ocioso (modem-sleep) | 3,3 V | 20 a 70 mA | 0,07 a 0,23 W |
+| ESP32 com Wi-Fi conectado, ocioso (modem-sleep) | 3,3 V | 20 a 68 mA | 0,07 a 0,22 W |
 | ESP32 transmitindo (pico de TX 802.11b) | 3,3 V | ~240 mA | ~0,79 W |
-| DHT22 medindo (×2) | 3,3 V | ~1,5 mA cada | ~5 mW cada |
-| PIR HC-SR501 (×2) | 5 V | < 65 µA cada | ~0,3 mW cada |
+| DHT22 medindo (×2) | 3,3 V | 1 a 1,5 mA cada | ~5 mW cada |
+| PIR HC-SR501 (×2) | 5 V | < 50 µA cada | ~0,25 mW cada |
 | LED + resistor de 150 Ω (só durante o pulso) | 3,3 V | 8,7 mA | ~29 mW |
 
-O consumo é dominado pelo **rádio Wi-Fi do ESP32**: os sensores somam cerca de 11 mW, enquanto cada transmissão chega a ~0,8 W de pico. Reduzir o número de transmissões é, portanto, a forma mais eficaz de economizar energia. É exatamente o que a Pesquisa Operacional otimiza ([issue #4](https://github.com/expotech2026-2/Projeto-Movement-2.0/issues/4)).
+Origem de cada valor, conferida nos datasheets da [seção 10](#10-fontes):
+- **ESP32:** Espressif v5.3. O modem-sleep, tabela 4-2, vai de 20 mA (80 MHz) a 68 mA (240 MHz). A transmissão em 802.11b a 1 Mbps e +19,5 dBm, tabela 5-4, consome 240 mA, e a recepção, de 95 a 100 mA.
+- **DHT22:** AM2302, de 1 a 1,5 mA medindo e de 40 a 50 µA em repouso.
+- **HC-SR501:** corrente estática menor que 50 µA. A tabela de especificações do módulo escreve "65mA", um erro de unidade.
+
+O consumo é dominado pelo **rádio Wi-Fi do ESP32**: os sensores somam cerca de 10 mW, enquanto cada transmissão chega a ~0,8 W de pico. Reduzir o número de transmissões é, portanto, a forma mais eficaz de economizar energia. É exatamente o que a Pesquisa Operacional otimiza ([issue #4](https://github.com/expotech2026-2/Projeto-Movement-2.0/issues/4)).
 
 ## 6. Energia por envio (entrada da Pesquisa Operacional)
 
@@ -185,9 +190,9 @@ Um resistor de 1/4 W (250 mW) atende; como o LED só fica aceso durante os pulso
 
 $$I_B = \frac{V_{GPIO} - V_{BE}}{R_B} = \frac{3{,}3 - 0{,}7}{1\,000} = 2{,}6\ \text{mA}$$
 
-O ganho mínimo do BC547 é $h_{FE} \approx 110$ (grupo A). A base precisa de pelo menos $I_C / h_{FE} = 51 / 110 \approx 0{,}46\ \text{mA}$; com 2,6 mA o ganho forçado é $\beta_F = 51 / 2{,}6 \approx 20$, e o transistor satura com folga (regra prática: $\beta_F$ entre 10 e 20). O pino fornece só 2,6 mA.
+O ganho mínimo do BC547 é $h_{FE} = 110$ (grupo A, de 110 a 220; o B vai de 200 a 450 e o C, de 420 a 800, com $I_C = 2$ mA). A base precisa de pelo menos $I_C / h_{FE} = 51 / 110 \approx 0{,}46\ \text{mA}$; com 2,6 mA o ganho forçado é $\beta_F = 51 / 2{,}6 \approx 20$, e o transistor satura com folga (regra prática: $\beta_F$ entre 10 e 20). O pino fornece só 2,6 mA.
 
-**Dissipação no transistor:** $P = V_{CE(sat)} \cdot I_C = 0{,}2 \times 0{,}051 \approx 10\ \text{mW}$, muito abaixo dos 500 mW do BC547.
+**Dissipação no transistor:** $P = V_{CE(sat)} \cdot I_C = 0{,}2 \times 0{,}051 \approx 10\ \text{mW}$. É muito abaixo do limite do BC547: 625 mW a 25 °C na onsemi, ou 500 mW em outros fabricantes. A onsemi também dá a referência para o $V_{CE(sat)}$: no máximo 0,25 V com 10 mA e 0,6 V com 100 mA, então os 0,2 V adotados para 51 mA são uma estimativa razoável.
 
 > Para comandar um ar-condicionado de verdade, o LED precisa enviar o protocolo do fabricante modulado numa portadora de 38 kHz. O firmware atual só pisca o LED (simulação herdada). O circuito acima já suporta a modulação; falta só o software.
 
@@ -218,17 +223,19 @@ Uma fonte de **12 V com 0,5 A ou mais** dá mais de 4 vezes de folga para a part
 
 ### 9.4 DHT11
 
-O DHT11 usa o mesmo protocolo de um fio do DHT22 (pulso alto de ~26–28 µs = bit 0 e ~70 µs = bit 1), então a análise de pull-up e constante RC da [seção 4](#4-pull-up-do-dht22-sinal-e-constante-rc) vale igual, com o resistor de **10 kΩ** da lista.
+O DHT11 usa o mesmo protocolo de um fio do DHT22. No manual da Aosong, o pulso alto dura de 23 a 27 µs no bit 0 e de 68 a 74 µs no bit 1. Por isso a análise de pull-up e constante RC da [seção 4](#4-pull-up-do-dht22-sinal-e-constante-rc) vale igual, com o resistor de **10 kΩ** da lista. A Aosong recomenda 4,7 kΩ, mas com o cabo curto da protoboard os 10 kΩ ainda dão $3\tau \approx 3\ \mu\text{s}$, bem abaixo dos 23 µs do bit mais curto.
 
-| Característica | DHT11 | DHT22 (simulação) |
+| Característica | DHT11 (Aosong V1.3) | DHT22 (simulação) |
 | --- | --- | --- |
 | Alimentação | 3,3 a 5,5 V | 3,3 a 6 V |
-| Corrente medindo | 0,5 a 2,5 mA | 1 a 1,5 mA |
-| Temperatura | 0 a 50 °C, ±2 °C | −40 a 80 °C, ±0,5 °C |
-| Umidade | 20 a 90%, ±5% | 0 a 100%, ±2 a 5% |
-| Intervalo mínimo entre leituras | 1 s | 2 s |
+| Corrente | até 1,0 mA medindo; 0,06 mA em repouso | 1 a 1,5 mA medindo; 40 a 50 µA em repouso |
+| Temperatura | −20 a 60 °C, ±2 °C | −40 a 80 °C, ±0,5 °C |
+| Umidade | 5 a 95%, ±5% | 0 a 100%, ±2 a 5% |
+| Intervalo mínimo entre leituras | mais de 2 s | 2 s |
 
-O firmware lê os sensores a cada 2 s, dentro do limite dos dois. O tipo do sensor é configurável no `config.h` (`MOVEMENT_DHT_TYPE DHT11`); sem ele, o firmware usa DHT22, que é o modelo disponível no Wokwi.
+O DHT11 de versões anteriores à V1.3 (2017) mede de 0 a 50 °C e de 20 a 90%. Algumas traduções do datasheet antigo indicam até 2,5 mA e leitura a cada 1 s.
+
+O firmware lê os sensores a cada 2 s: é o mínimo do DHT22 e fica no limite do DHT11. Se o DHT11 falhar leituras, aumente `intervaloDHT` no `sketch.ino` para 2500 ms. O tipo do sensor é configurável no `config.h` (`MOVEMENT_DHT_TYPE DHT11`); sem ele, o firmware usa DHT22, que é o modelo disponível no Wokwi.
 
 A lista tem **um** DHT11, mas o firmware lê dois (interno e externo). Sem o sensor externo, o firmware mantém os últimos valores externos (25 °C e 0% no início). Para medir a temperatura externa de verdade, inclua um segundo DHT11 no GPIO 14.
 
@@ -244,19 +251,39 @@ O ESP32 lê alguns pinos (*strapping pins*) no momento em que liga:
 
 | Parte | Tensão | Corrente | Potência |
 | --- | --- | --- | --- |
-| ESP32 com Wi-Fi (seção 5) | 3,3 V | 20 a 70 mA ocioso; ~240 mA em pico de TX | 0,07 a 0,23 W ocioso |
+| ESP32 com Wi-Fi (seção 5) | 3,3 V | 20 a 68 mA ocioso; ~240 mA em pico de TX | 0,07 a 0,22 W ocioso |
 | Duas barreiras iPEC | 12 V | 120 mA | 1,44 W, contínuo |
 | LED IR + BC547 (só nos pulsos) | 5 V | 51 mA | 0,26 W |
-| DHT11 | 3,3 V | até 2,5 mA | ~8 mW |
+| DHT11 | 3,3 V | até 1,0 mA | ~3 mW |
 
 Na montagem real, o maior consumo contínuo é o das barreiras (1,44 W), e não o do ESP32. A otimização da Pesquisa Operacional reduz a parte que o software controla: as transmissões Wi-Fi do ESP32.
 
 ## 10. Fontes
 
-- Espressif, *ESP32 Series Datasheet*: características elétricas (níveis lógicos, corrente dos pinos, *strapping pins*) e consumo por modo de operação. <https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf>
-- Aosong, *AM2302 (DHT22) datasheet*: protocolo de um fio, temporização dos bits, pull-up e consumo. <https://cdn-shop.adafruit.com/datasheets/Digital+humidity+and+temperature+sensor+AM2302.pdf>
-- Datasheet do DHT11 (Aosong ou equivalente): faixas, precisão e intervalo entre leituras.
-- Datasheet do BC547 (por exemplo, onsemi ou Fairchild): $I_C$ máximo de 100 mA, $h_{FE}$ por grupo, $V_{CE(sat)}$ e potência de 500 mW.
-- Manual do sensor iPEC IR15 Mini e anúncios do produto: alimentação, consumo e contatos do relé. <https://www.cftvclube.com.br/alarmes/mini-sensor-de-barreira-ipec-ir-15-feixe-simples-infravermelho-15-metros>
-- Datasheet do módulo HC-SR501: alimentação de 4,5 a 20 V, saída de 3,3 V, corrente em repouso.
+Valores conferidos em 06/11/2026 nos documentos abaixo:
+
+- **ESP32:** Espressif, *ESP32 Series Datasheet* v5.3. <https://documentation.espressif.com/esp32_datasheet_en.pdf>
+  - Tabela 5-3: $V_{IH} \ge 0{,}75\,V_{DD}$ e $V_{IL} \le 0{,}25\,V_{DD}$.
+  - Tabela 4-2: modem-sleep de 20 a 68 mA.
+  - Tabela 5-4: transmissão em 802.11b a 240 mA e recepção de 95 a 100 mA.
+  - Tabela 3-1: o MTDI (GPIO 12) tem pull-down como padrão.
+- **DHT22:** Aosong, *AM2302 (DHT22) datasheet*. <https://cdn-shop.adafruit.com/datasheets/Digital+humidity+and+temperature+sensor+AM2302.pdf>
+  - Alimentação de 3,3 a 6 V.
+  - De 1 a 1,5 mA medindo e de 40 a 50 µA em repouso.
+  - Coleta a cada 2 s.
+- **DHT11:** Aosong, *DHT11 Product Manual* V1.3, de 31/03/2017. <https://akizukidenshi.com/goodsaffix/DHT11_20180119.pdf>
+  - Alimentação de 3,3 a 5,5 V.
+  - Até 1,0 mA medindo e 0,06 mA em repouso.
+  - Leitura a cada mais de 2 s.
+  - Pull-up de 4,7 kΩ.
+  - Pulso alto do bit 0 de 23 a 27 µs, e do bit 1 de 68 a 74 µs.
+- **BC547:** onsemi, *BC546, BC547, BC548*. <https://www.onsemi.com/pdf/datasheet/bc546-d.pdf>
+  - $I_C$ máximo de 100 mA.
+  - $P_D$ de 625 mW a 25 °C.
+  - $h_{FE}$ com 2 mA: grupo A de 110 a 220, B de 200 a 450 e C de 420 a 800.
+  - $V_{CE(sat)}$ no máximo 0,25 V com 10 mA e 0,6 V com 100 mA.
+- **iPEC IR15 Mini:** manual do sensor e anúncios do produto, com alimentação, consumo e contatos do relé. <https://www.cftvclube.com.br/alarmes/mini-sensor-de-barreira-ipec-ir-15-feixe-simples-infravermelho-15-metros>
+- **HC-SR501:** datasheet do módulo, distribuído por MPJA e Electrodragon. <https://courses.ece.cornell.edu/ece5990/ECE5725_Spring2020_Projects/May_15_Demo/Smart%20Lock/W_pp445_yl656/datasheet/31227sc.pdf>
+  - Alimentação de 4,5 a 20 V, saída de 3,3 V e corrente estática menor que 50 µA.
+  - A tabela de especificações escreve "65mA", um erro de unidade.
 - Firmware do projeto: [`firmware/climacontrol/sketch.ino`](../firmware/climacontrol/sketch.ino) (modelo térmico e medição do envio) e [`diagram.json`](../firmware/climacontrol/diagram.json) (circuito).
