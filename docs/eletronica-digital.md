@@ -230,11 +230,22 @@ Salve os prints em `docs/img/` (`porta-logisim.png`, `contador-logisim.png` e `c
 
 O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presença fazem o papel delas, nos mesmos pinos (A no GPIO 13, B no GPIO 26). O PIR do Wokwi fica em nível alto por alguns segundos depois de acionado, o que permite reproduzir a sobreposição dos feixes.
 
-1. Em <https://wokwi.com/projects/new/esp32> (logado, para salvar como privado), cole `sketch.ino` e, na aba `diagram.json`, o `firmware/climacontrol/diagram.json`. Em *Library Manager*, acrescente **DHT sensor library**.
-2. Para enviar à produção, crie o `config.h` no projeto (ver [issue #3](https://github.com/expotech2026-2/Projeto-Movement-2.0/issues/3)) **sem** a linha `MOVEMENT_DHT_TYPE DHT11`, porque o Wokwi simula o DHT22. Não deixe o projeto público: o token fica nele.
-3. **Entrada:** clique em "Barreira A (fora)" e, menos de 2 s depois, em "Barreira B (dentro)". Quando os dois voltarem a 0, o monitor serial mostra `[PRESENCA] ENTRADA (+1)`.
-4. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`.
-5. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "ALTERANDO".
+1. **Projeto pronto:** [Movement 2.0 - ESP32 (Devlop)](https://wokwi.com/projects/479966017431592961). Ele tem o `sketch.ino`, o `diagram.json`, a **DHT sensor library** e um `config.h` com o token `PREENCHA_LOCALMENTE`. Para montar do zero, use <https://wokwi.com/projects/new/esp32>, cole esses arquivos e acrescente a biblioteca no *Library Manager*.
+2. **Envio para a API:** no `config.h`, informe:
+   - `MOVEMENT_API_URL`, com o endereço do site seguido de `/api/telemetry`;
+   - `MOVEMENT_CA_CERT`, com a CA raiz do domínio;
+   - `MOVEMENT_DEVICE_TOKEN`, com o token do dispositivo (ver [issue #3](https://github.com/expotech2026-2/Projeto-Movement-2.0/issues/3)).
+
+   Deixe de fora a linha `MOVEMENT_DHT_TYPE DHT11`, porque o Wokwi simula o DHT22.
+3. **Token:** no plano gratuito, o Wokwi só salva projetos **públicos**. Cole o token só para rodar e **não salve** depois. O projeto salvo fica sempre com `PREENCHA_LOCALMENTE`.
+4. **Velocidade:** mantenha a janela do navegador visível. Com a aba em segundo plano, a simulação cai para poucos por cento do tempo real. O `millis()` simulado não acompanha a rede, e o tempo medido no `[Movement] HTTP ... em N ms` sai baixo demais.
+5. **Entrada:** clique em "Barreira A (fora)" e, menos de 2 s depois, em "Barreira B (dentro)". Quando os dois voltarem a 0, o monitor serial mostra `[PRESENCA] ENTRADA (+1)`.
+6. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`.
+7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "ALTERANDO".
+8. **Modo manual (entrada M):** digite no campo do monitor serial e tecle Enter.
+   - `22` (ou outra temperatura de 18 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
+   - `AC_OFF`: força o compressor desligado ($\overline{C}$ = 0).
+   - `AUTO`: volta ao automático.
 
 ## 10. Verificação automatizada
 
