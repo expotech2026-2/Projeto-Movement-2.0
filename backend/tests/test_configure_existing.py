@@ -6,6 +6,7 @@ from sqlalchemy.engine import URL
 
 from app import configure_existing
 from app.configure_existing import connection_url
+from app.database import SUPABASE_CA
 
 
 def options(**values) -> Namespace:
@@ -30,6 +31,14 @@ def test_supabase_url_receives_password_driver_and_tls():
     assert url.password == "s3gredo:@/com-simbolos"
     assert url.host == "aws-1-us-west-2.pooler.supabase.com"
     assert url.database == "postgres"
+    assert url.query["sslmode"] == "verify-full"
+    assert url.query["sslrootcert"] == SUPABASE_CA
+
+
+def test_other_remote_hosts_verify_against_system_certificates():
+    url = connection_url(
+        options(url="postgresql://sample@db.example.invalid/demo"), "senha-sintetica"
+    )
     assert url.query["sslmode"] == "verify-full"
     assert url.query["sslrootcert"] == "system"
 
