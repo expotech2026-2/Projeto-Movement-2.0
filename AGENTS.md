@@ -2,9 +2,12 @@
 
 Movement 2.0: gestão de salas e aparelhos de ar-condicionado com telemetria de um ESP32. Projeto da ExpoTech 2026.2, categoria INTERFACE (Engenharia da Computação). Cada tarefa é uma issue do GitHub com especificação, testes obrigatórios e critérios de aceite; siga a issue à risca e este guia para tudo que ela não disser.
 
+**Contexto:** antes de começar, leia [`contexto/README.md`](contexto/README.md). Ele aponta o arquivo de cada área: propósito, software, hardware, infraestrutura em nuvem e estado atual. Ao terminar uma tarefa que mude o que está pronto ou pendente, atualize `contexto/estado-atual.md`.
+
 ## Mapa do repositório
 
 ```text
+contexto/               Panorama do projeto para IAs, sem segredos; estado-atual.md lista o que falta
 backend/app/            FastAPI: main.py (create_app, telemetria), routers create_*_router()
 backend/app/models.py   Modelos SQLAlchemy 2.0 (tipados com Mapped)
 backend/migrations/     Alembic; versions/000N_slug.py
