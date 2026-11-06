@@ -29,12 +29,15 @@ String movementPendingPayload;
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinEntrada  = 13;
-const int pinSaida    = 12;
+const int pinSaida    = 26;    // GPIO 12 é pino de partida; ver docs/fisica.md, seção 9.5
 const int pinLED_IR   = 2;     // LED simula pulso IR enviado ao AC
 
 #define DHTPIN_EXTERNO 14
 #define DHTPIN_INTERNO 27
-#define DHTTYPE        DHT22
+#ifndef MOVEMENT_DHT_TYPE
+#define MOVEMENT_DHT_TYPE DHT22   // modelo do Wokwi; a montagem real usa DHT11 (config.h)
+#endif
+#define DHTTYPE        MOVEMENT_DHT_TYPE
 DHT dhtExterno(DHTPIN_EXTERNO, DHTTYPE);
 DHT dhtInterno(DHTPIN_INTERNO, DHTTYPE);
 
@@ -105,8 +108,8 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  pinMode(pinEntrada, INPUT);
-  pinMode(pinSaida,   INPUT);
+  pinMode(pinEntrada, INPUT_PULLUP);   // contato do relé da barreira entre o pino e o GND
+  pinMode(pinSaida,   INPUT_PULLUP);
   pinMode(pinLED_IR,  OUTPUT);
   digitalWrite(pinLED_IR, LOW);
 
@@ -416,8 +419,9 @@ void enviarMovement() {
   http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
-  Serial.printf("[Movement] HTTP %d\n", code);
+  Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
   if (code == 200 || code == 201 || code == 422) movementPendingPayload = "";
   http.end();
 }
