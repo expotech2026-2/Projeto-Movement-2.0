@@ -18,6 +18,7 @@ import { useTheme } from "./hooks/useTheme";
 import { clearSession, getSessionToken, request } from "./services/movementApi";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
+const SamplingPlan = lazy(() => import("./components/SamplingPlan"));
 
 const number = (value, decimals = 1) =>
   value == null
@@ -716,6 +717,13 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           </div>
         )}
       </section>
+      {room?.id && (
+        <Suspense
+          fallback={<p className="muted">Carregando plano de leitura…</p>}
+        >
+          <SamplingPlan roomId={room.id} />
+        </Suspense>
+      )}
       <div className="overview-bottom">
         <section className="panel">
           <div className="section-heading">

@@ -543,6 +543,26 @@ h1 {
 .chart-legend span + span {
   color: var(--chart-2);
 }
+.sampling-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sampling-metrics div {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.sampling-metrics span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.sampling-metrics strong {
+  font-size: 18px;
+}
 select,
 input {
   border: 1px solid var(--field-border);
@@ -1146,7 +1166,8 @@ td small {
   }
 }
 @media (max-width: 900px) {
-  .metric-grid {
+  .metric-grid,
+  .sampling-metrics {
     grid-template-columns: repeat(2, 1fr);
   }
   .overview-bottom {

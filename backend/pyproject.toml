@@ -16,6 +16,7 @@ dependencies = [
   "pydantic-settings>=2.7,<3",
   "itsdangerous>=2.2,<3",
   "reportlab>=4.2,<5",
+  "scipy>=1.14,<2",
 ]
 
 [project.optional-dependencies]

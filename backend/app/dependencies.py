@@ -3,9 +3,12 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import Principal, resolve_session
+from app.models import Device
+from app.security import hash_device_token
 
 bearer = HTTPBearer(auto_error=False)
 Credentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]
@@ -42,3 +45,22 @@ def require_admin(principal: CurrentUser) -> Principal:
 
 
 AdminUser = Annotated[Principal, Depends(require_admin)]
+
+
+def require_device(session: Db, credentials: Credentials) -> Device:
+    device = None
+    if credentials:
+        device = session.scalar(
+            select(Device).where(
+                Device.token_hash == hash_device_token(credentials.credentials),
+                Device.enabled.is_(True),
+            )
+        )
+    if device is None:
+        raise HTTPException(
+            401, "Dispositivo não autorizado", headers={"WWW-Authenticate": "Bearer"}
+        )
+    return device
+
+
+CurrentDevice = Annotated[Device, Depends(require_device)]
