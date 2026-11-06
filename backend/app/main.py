@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import AwareDatetime
 from sqlalchemy import text
@@ -32,7 +34,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0004_alerts"
+SCHEMA_VERSION = "0005_alerts"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -66,6 +68,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["Content-Disposition"],
     )
+
+    @app.exception_handler(RequestValidationError)
+    async def hide_credentials(request: Request, exc: RequestValidationError) -> Response:
+        path = getattr(request.scope.get("route"), "path", None)
+        if path in ("/auth/login", "/users", "/users/{user_id}"):
+            exc = RequestValidationError(
+                [{key: error[key] for key in ("loc", "msg", "type")} for error in exc.errors()]
+            )
+        return await request_validation_exception_handler(request, exc)
 
     @app.middleware("http")
     async def prevent_sensitive_cache(request: Request, call_next):

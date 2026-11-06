@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.auth import is_builtin_username
 from app.dependencies import AdminUser, Db, require_admin
@@ -46,8 +47,8 @@ class UserOutput(BaseModel):
 def create_users_router() -> APIRouter:
     router = APIRouter(prefix="/users", dependencies=[Depends(require_admin)], tags=["Usuários"])
 
-    def get_user(session, user_id: UUID) -> User:
-        user = session.get(User, user_id)
+    def get_user_for_update(session: Session, user_id: UUID) -> User:
+        user = session.get(User, user_id, with_for_update=True, populate_existing=True)
         if user is None:
             raise HTTPException(404, "Usuário não encontrado")
         return user
@@ -77,9 +78,11 @@ def create_users_router() -> APIRouter:
 
     @router.put("/{user_id}", response_model=UserOutput)
     def update_user(user_id: UUID, payload: UserUpdate, session: Db, principal: AdminUser):
-        user = get_user(session, user_id)
+        user = get_user_for_update(session, user_id)
         if principal.user_id == user.id and (payload.role != "admin" or not payload.active):
             raise HTTPException(409, "Você não pode remover o próprio acesso de administrador")
+        if user.active != payload.active or user.role != payload.role:
+            user.session_version += 1
         user.full_name = payload.full_name
         user.role = payload.role
         user.active = payload.active
@@ -90,7 +93,7 @@ def create_users_router() -> APIRouter:
 
     @router.delete("/{user_id}", status_code=204)
     def delete_user(user_id: UUID, session: Db, principal: AdminUser):
-        user = get_user(session, user_id)
+        user = get_user_for_update(session, user_id)
         if principal.user_id == user.id:
             raise HTTPException(409, "Você não pode excluir a própria conta")
         session.delete(user)
