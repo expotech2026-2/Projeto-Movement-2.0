@@ -330,7 +330,7 @@ function Workspace({ user, onLogout }) {
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>
-            {isAdmin && ["overview", "rooms"].includes(tab) && (
+            {isAdmin && !loading && ["overview", "rooms"].includes(tab) && (
               <div className="heading-actions">
                 <button
                   className="button secondary"

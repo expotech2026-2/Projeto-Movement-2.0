@@ -29,6 +29,7 @@ class Principal:
     full_name: str
     role: str
     user_id: UUID | None = None
+    session_version: int = 0
 
     @property
     def is_admin(self) -> bool:
@@ -64,7 +65,11 @@ def authenticate(session: Session, settings: Settings, username: str, password: 
 
 def principal_from_user(user: User) -> Principal:
     return Principal(
-        username=user.username, full_name=user.full_name, role=user.role, user_id=user.id
+        username=user.username,
+        full_name=user.full_name,
+        role=user.role,
+        user_id=user.id,
+        session_version=user.session_version,
     )
 
 
@@ -74,6 +79,7 @@ def issue_principal_session(settings: Settings, principal: Principal, password_h
         username=principal.username,
         user_id=str(principal.user_id) if principal.user_id else None,
         password_hash=password_hash,
+        session_version=principal.session_version,
     )
 
 
@@ -95,6 +101,7 @@ def resolve_session(session: Session, settings: Settings, token: str) -> Princip
         or not user.active
         or user.username != payload["sub"]
         or payload.get("pv") != password_fingerprint(user.password_hash)
+        or payload.get("sv") != user.session_version
     ):
         return None
     return principal_from_user(user)
