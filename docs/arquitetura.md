@@ -12,39 +12,52 @@ O Movement gerencia salas e aparelhos de ar-condicionado e recebe a telemetria d
 | API | Python 3.12, FastAPI, Pydantic |
 | Persistência | SQLAlchemy 2.0, Alembic, PostgreSQL 17 gerenciado (Supabase) |
 | Otimização | SciPy (`milp`, solver HiGHS) |
-| Dispositivo | ESP32 (Arduino C++), sensores DHT22 e PIR |
+| Dispositivo | ESP32 (Arduino C++), duas barreiras infravermelhas na porta e DHT11 (no Wokwi: dois PIR e DHT22) |
 | Nuvem e entrega | Docker, Azure Container Registry, Azure App Service, GitHub Actions |
 
 ## 2. C4 nível 1 — Contexto
 
+Os níveis 1 e 2 usam `flowchart` com a notação do C4: o tipo de cada elemento aparece entre colchetes, e as cores e a fronteira tracejada seguem o padrão do C4. Os blocos `C4Context` e `C4Container` do Mermaid sobrepunham os rótulos das setas no GitHub.
+
 ```mermaid
-C4Context
-  title Movement — Contexto
-  Person(admin, "Administrador", "Cadastra unidades, salas, aparelhos, sensores e usuários")
-  Person(prof, "Professor", "Consulta salas, leituras, alertas e relatórios")
-  System(movement, "Movement", "Gestão de climatização das salas")
-  System_Ext(esp, "Controlador ESP32", "Sensores DHT22 e PIR; envia telemetria")
-  Rel(admin, movement, "Usa", "HTTPS")
-  Rel(prof, movement, "Usa", "HTTPS")
-  Rel(esp, movement, "Envia leituras e consulta o intervalo", "HTTPS + token")
+flowchart LR
+  admin["<b>Administrador</b><br/>[Pessoa]<br/>Cadastra unidades, salas,<br/>aparelhos, sensores e usuários"]
+  prof["<b>Professor</b><br/>[Pessoa]<br/>Consulta salas, leituras,<br/>alertas e relatórios"]
+  esp["<b>Controlador ESP32</b><br/>[Sistema externo]<br/>Barreiras IR na porta e DHT11;<br/>decide o resfriamento"]
+  movement["<b>Movement</b><br/>[Sistema]<br/>Gestão de climatização das salas"]
+  admin -- "Usa<br/>[HTTPS]" --> movement
+  prof -- "Usa<br/>[HTTPS]" --> movement
+  esp -- "Envia leituras e<br/>consulta o intervalo<br/>[HTTPS + token]" --> movement
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
+  classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
+  class admin,prof person
+  class movement system
+  class esp external
 ```
 
 ## 3. C4 nível 2 — Contêineres
 
 ```mermaid
-C4Container
-  title Movement — Contêineres
-  Person(user, "Administrador / Professor")
-  System_Ext(esp, "ESP32", "Firmware C++")
-  System_Boundary(az, "Azure App Service (uma imagem Docker)") {
-    Container(spa, "Site", "React + Vite", "Painel, cadastros, alertas, relatórios")
-    Container(api, "API", "Python + FastAPI", "Autenticação, telemetria, alertas, retenção, otimização")
-  }
-  ContainerDb(db, "Banco", "PostgreSQL 17 no Supabase", "Schema movement")
-  Rel(user, spa, "Usa", "HTTPS")
-  Rel(spa, api, "Chama /api", "JSON/HTTPS")
-  Rel(esp, api, "POST /api/telemetry, GET /api/devices/me/sampling-interval", "JSON/HTTPS")
-  Rel(api, db, "Lê e grava", "SQL com TLS")
+flowchart LR
+  user["<b>Administrador / Professor</b><br/>[Pessoa]"]
+  esp["<b>ESP32</b><br/>[Sistema externo]<br/>Firmware C++"]
+  subgraph az["Azure App Service (uma imagem Docker)"]
+    spa["<b>Site</b><br/>[Contêiner: React + Vite]<br/>Painel, cadastros,<br/>alertas, relatórios"]
+    api["<b>API</b><br/>[Contêiner: Python + FastAPI]<br/>Autenticação, telemetria, alertas,<br/>retenção, otimização"]
+  end
+  db[("<b>Banco</b><br/>[PostgreSQL 17 no Supabase]<br/>Schema movement")]
+  user -- "Usa<br/>[HTTPS]" --> spa
+  spa -- "Chama /api<br/>[JSON/HTTPS]" --> api
+  esp -- "POST /api/telemetry<br/>GET /api/devices/me/sampling-interval<br/>[HTTPS + token]" --> api
+  api -- "Lê e grava<br/>[SQL com TLS]" --> db
+  classDef person fill:#08427b,stroke:#052e56,color:#ffffff
+  classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
+  classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
+  class user person
+  class spa,api,db container
+  class esp external
+  style az fill:none,stroke:#888888,stroke-dasharray:6 4
 ```
 
 O site e a API saem da mesma imagem (`Dockerfile`): `app.site:create_site` serve o build do React em `/` e a API em `/api`.
