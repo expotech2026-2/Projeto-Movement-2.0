@@ -39,7 +39,7 @@
       "id": "r1",
       "top": 99.95,
       "left": 288,
-      "attrs": { "value": "10" }
+      "attrs": { "value": "150" }
     },
     {
       "type": "wokwi-text",
@@ -84,7 +84,7 @@
     [ "pir2:GND", "esp:GND.2", "black", [ "h57.34", "v-96", "v-240", "h57.6" ] ],
     [ "pir1:VCC", "esp:3V3", "red", [ "v0" ] ],
     [ "pir1:GND", "esp:GND.2", "black", [ "h47.74", "v-163.2", "h57.6" ] ],
-    [ "pir2:OUT", "esp:12", "green", [ "h134.26", "v-86.4", "h105.6" ] ],
+    [ "pir2:OUT", "esp:26", "green", [ "h134.26", "v-86.4", "h105.6" ] ],
     [ "pir1:OUT", "esp:13", "green", [ "v67.2", "h249.46" ] ],
     [ "dht1:GND", "esp:GND.2", "black", [ "v38.4", "h-144" ] ],
     [ "dht1:VCC", "esp:3V3", "red", [ "h-364.8", "v364.8", "v-191.85" ] ],

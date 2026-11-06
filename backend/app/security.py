@@ -41,10 +41,20 @@ def password_fingerprint(password_hash: str) -> str:
 
 
 def issue_session(
-    settings: Settings, *, username: str, user_id: str | None, password_hash: str
+    settings: Settings,
+    *,
+    username: str,
+    user_id: str | None,
+    password_hash: str,
+    session_version: int = 0,
 ) -> str:
     return session_serializer(settings).dumps(
-        {"sub": username, "uid": user_id, "pv": password_fingerprint(password_hash)}
+        {
+            "sub": username,
+            "uid": user_id,
+            "pv": password_fingerprint(password_hash),
+            "sv": session_version,
+        }
     )
 
 

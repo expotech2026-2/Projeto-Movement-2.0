@@ -54,6 +54,7 @@ backend/app/          FastAPI, modelos, serviços e retenção
 backend/migrations/   Migrações Alembic
 backend/tests/        Testes com PostgreSQL separado
 database/             Consultas e importação de servidores no pgAdmin
+docs/                 Documentação dos requisitos da ExpoTech (física, pesquisa operacional, arquitetura, eletrônica)
 firmware/             ESP32 do projeto original com envio para FastAPI
 scripts/              Inicialização e encerramento no Windows
 ```
@@ -103,7 +104,9 @@ Para aplicar as migrações e gerar a configuração, na pasta `backend`:
 ..\.venv\Scripts\python.exe -m app.configure_existing --url "postgresql://postgres.ifirpelguapcdszegqqm@aws-1-us-west-2.pooler.supabase.com:5432/postgres" --env-file .env.supabase
 ```
 
-O comando solicita a senha do banco (Project Settings > Database) e, na primeira execução, cria a senha do administrador de produção. Fora desta máquina a conexão exige TLS (`sslmode=require`). O resultado fica em `backend/.env.supabase`, fora do Git, e o `backend/.env` local é preservado. Como o pooler ignora o `search_path` da URL, a API define o schema em cada conexão a partir de `MOVEMENT_DATABASE_SCHEMA=movement`.
+O comando solicita a senha do banco (Project Settings > Database) e, na primeira execução, cria a senha do administrador. Para conexões remotas, o padrão é `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`. Use `sslrootcert` com o caminho do certificado da CA do provedor se ele não estiver no repositório de CAs confiáveis do cliente.
+
+O resultado fica em `backend/.env.supabase`, fora do Git. O comando aceita apenas `.env` ou `.env.<nome>` em `backend/`, com permissões privadas também para o backup. Ao reconfigurar um arquivo, ele mantém o login que já está gravado ali. Como o pooler ignora o `search_path` da URL, a API define o schema em cada conexão a partir de `MOVEMENT_DATABASE_SCHEMA=movement`.
 
 Para executar a API local com o banco do Supabase, na pasta `backend`:
 

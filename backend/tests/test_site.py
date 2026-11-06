@@ -24,5 +24,9 @@ def test_site_serves_frontend_at_root_and_api_under_prefix(database_url, tmp_pat
             "/api/auth/login", json={"username": "admin", "password": "test-password-123"}
         )
         assert login.status_code == 200
+        password = "senha-sintetica-" * 20
+        invalid = client.post("/api/auth/login", json={"username": "admin", "password": password})
+        assert invalid.status_code == 422
+        assert password not in invalid.text
         assert client.get("/api/openapi.json").status_code == 200
         assert client.get("/health").status_code == 404

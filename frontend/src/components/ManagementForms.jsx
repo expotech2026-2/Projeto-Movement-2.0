@@ -228,13 +228,11 @@ function ApplianceFields({ values, update }) {
   );
   const brandIsCustom =
     customBrand ?? (brands !== null && values.brand !== "" && !catalogBrand);
-  const usesCatalog =
-    !brandIsCustom && catalogBrand && CATALOG_KINDS.includes(values.kind);
-  const modelsKey = usesCatalog ? `${values.brand}|${values.kind}` : "";
+  const usesCatalog = !brandIsCustom && catalogBrand;
+  const modelsKey = usesCatalog ? values.brand.toUpperCase() : "";
   useEffect(() => {
     if (!modelsKey) return;
-    const [brand, kind] = modelsKey.split("|");
-    const params = new URLSearchParams({ brand, kind, limit: "2000" });
+    const params = new URLSearchParams({ brand: modelsKey, limit: "2000" });
     let active = true;
     catalog(`/catalog/models?${params}`)
       .then((items) => active && setModels({ key: modelsKey, items }))
@@ -245,7 +243,9 @@ function ApplianceFields({ values, update }) {
   }, [modelsKey]);
   const options = models.key === modelsKey ? models.items : [];
   const loadingModels = usesCatalog && models.key !== modelsKey;
-  const matchId = options.find((item) => item.model === values.model)?.id;
+  const matchId = options.find(
+    (item) => item.model === values.model && item.kind === values.kind,
+  )?.id;
   const modelIsCustom =
     customModel ??
     (!loadingModels && values.model !== "" && matchId === undefined);
@@ -275,6 +275,7 @@ function ApplianceFields({ values, update }) {
       item
         ? {
             model: item.model,
+            kind: item.kind,
             capacity_btu: item.capacity_btu,
             inverter: item.inverter,
           }
@@ -372,8 +373,8 @@ function ApplianceFields({ values, update }) {
               </option>
               {options.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.model} · {number(item.capacity_btu)} BTU/h ·{" "}
-                  {AC_FUNCTIONS[item.function]}
+                  {item.model} · {AC_KINDS[item.kind]} ·{" "}
+                  {number(item.capacity_btu)} BTU/h · {AC_FUNCTIONS[item.function]}
                 </option>
               ))}
               <option value={OTHER}>Outro modelo (digitar)</option>
@@ -409,8 +410,7 @@ function ApplianceFields({ values, update }) {
       )}
       {!CATALOG_KINDS.includes(values.kind) && (
         <p className="field-hint">
-          Portáteis e VRF/VRV não constam da tabela de etiquetagem do Inmetro;
-          informe marca e modelo manualmente.
+          Para portáteis e VRF/VRV, informe o modelo manualmente.
         </p>
       )}
       {catalogError && (

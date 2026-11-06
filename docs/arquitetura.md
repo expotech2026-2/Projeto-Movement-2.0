@@ -205,7 +205,7 @@ subject.attach(HumidityAlertObserver())
 subject.notify(session, reading)  # cada observador decide se gera alerta
 ```
 
-Os alertas ficam na tabela `alerts` (migração 0004), aparecem no painel e são registrados no log `movement.alerts`, que o Azure mostra no Log stream.
+Os alertas ficam na tabela `alerts` (migração 0005), aparecem no painel e são registrados no log `movement.alerts`, que o Azure mostra no Log stream.
 
 ### 7.3 Repository (Fowler, PoEAA — **não é GoF**)
 
