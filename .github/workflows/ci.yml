@@ -41,8 +41,17 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python hardware/logica/verificar_logica.py
+      - run: python hardware/logica/testar_firmware.py
   image:
-    needs: [backend, frontend]
+    needs: [backend, frontend, firmware]
     runs-on: ubuntu-latest
     env:
       # Só a main publica no Azure Container Registry; nas demais branches a imagem é apenas construída.

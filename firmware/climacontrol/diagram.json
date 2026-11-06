@@ -67,14 +67,14 @@
       "id": "text4",
       "top": 230.4,
       "left": -432,
-      "attrs": { "text": "Sensor Saida" }
+      "attrs": { "text": "Barreira B (dentro)" }
     },
     {
       "type": "wokwi-text",
       "id": "text5",
       "top": 57.6,
       "left": -432,
-      "attrs": { "text": "Sensor Entrada" }
+      "attrs": { "text": "Barreira A (fora)" }
     }
   ],
   "connections": [

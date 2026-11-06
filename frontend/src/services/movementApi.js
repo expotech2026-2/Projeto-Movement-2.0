@@ -99,3 +99,7 @@ export function samplingPlan(roomId, budgetRatio = 0.5) {
     `/rooms/${encodeURIComponent(roomId)}/sampling-plan?budget_ratio=${budgetRatio}`,
   );
 }
+
+export function roomAlerts(roomId, limit = 5) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/alerts?limit=${limit}`);
+}

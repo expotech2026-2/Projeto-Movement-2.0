@@ -177,3 +177,17 @@ class SensorReading(Base):
     humidity_outside: Mapped[float] = mapped_column(Float)
     ac_on: Mapped[bool] = mapped_column(Boolean)
     manual_mode: Mapped[bool] = mapped_column(Boolean)
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    __table_args__ = (
+        Index("ix_alerts_room_created", "room_id", "created_at"),
+        CheckConstraint("kind IN ('conforto', 'umidade')", name="ck_alert_kind"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    room_id: Mapped[str] = mapped_column(ForeignKey("rooms.id"))
+    kind: Mapped[str] = mapped_column(String(16))
+    message: Mapped[str] = mapped_column(String(200))
+    value: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

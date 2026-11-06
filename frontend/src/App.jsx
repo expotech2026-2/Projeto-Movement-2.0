@@ -10,6 +10,7 @@ import { Icon } from "./components/Icon";
 import { ManagementForm } from "./components/ManagementForms";
 import { OperatorLogin } from "./components/OperatorLogin";
 import { ReportsView } from "./components/ReportsView";
+import { RoomAlerts } from "./components/RoomAlerts";
 import { UnitsView } from "./components/UnitsView";
 import { UsersView } from "./components/UsersView";
 import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
@@ -724,6 +725,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           <SamplingPlan roomId={room.id} />
         </Suspense>
       )}
+      {room?.id && <RoomAlerts roomId={room.id} refresh={feed.updatedAt} />}
       <div className="overview-bottom">
         <section className="panel">
           <div className="section-heading">

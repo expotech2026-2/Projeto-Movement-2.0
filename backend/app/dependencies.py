@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Principal, resolve_session
 from app.models import Device
+from app.repository import PostgresTelemetryRepository, TelemetryRepository
 from app.security import hash_device_token
 
 bearer = HTTPBearer(auto_error=False)
@@ -64,3 +65,10 @@ def require_device(session: Db, credentials: Credentials) -> Device:
 
 
 CurrentDevice = Annotated[Device, Depends(require_device)]
+
+
+def telemetry_repository(session: Db) -> TelemetryRepository:
+    return PostgresTelemetryRepository(session)
+
+
+Repository = Annotated[TelemetryRepository, Depends(telemetry_repository)]
