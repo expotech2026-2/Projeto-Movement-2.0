@@ -66,9 +66,11 @@ pytest backend/tests -q
 npm run lint --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
+python hardware/logica/verificar_logica.py
+python hardware/logica/testar_firmware.py
 ```
 
-O CI roda esses comandos, exceto o `ruff format --check`, e também constrói a imagem Docker.
+O CI roda esses comandos, exceto o `ruff format --check`, e também constrói a imagem Docker. `testar_firmware.py` precisa de um compilador C++ (`g++`, `clang++` ou `pip install ziglang`).
 
 ## Convenções
 
@@ -88,7 +90,7 @@ O CI roda esses comandos, exceto o `ruff format --check`, e também constrói a 
   A fixture de testes roda upgrade → downgrade → upgrade e, ao final, `alembic check`. Modelo e migração diferentes fazem a suíte falhar no encerramento.
 - **Testes:** testes puros não usam fixture. Testes de API usam `context`, que fornece `client`, `app`, `unit`, `room`, `device`, `professor`, `operator_headers` (admin), `professor_headers` e `device_headers`. Para publicar uma leitura, veja `sample()` e `publish()` em `backend/tests/test_telemetry.py`.
 - **Frontend:** componentes funcionais em `frontend/src/components/`. Chamadas HTTP só por `request(path, options)` de `services/movementApi.js`, com uma função exportada por rota e teste em `movementApi.test.js`. Gráficos com Recharts; estilos em `src/styles/movement.css`.
-- **Firmware:** sem bibliotecas novas além da DHT. O CI não compila o firmware: mantenha as mudanças pequenas, revise a sintaxe e descreva no PR o teste manual no Wokwi. `config.h` é privado.
+- **Firmware:** sem bibliotecas novas além da DHT. O CI não compila o firmware inteiro, só testa a lógica da porta (`passoPorta` e `filtrarBarreira`, extraídas do `sketch.ino` por `hardware/logica/testar_firmware.py`): mantenha as mudanças pequenas, revise a sintaxe e descreva no PR o teste manual no Wokwi. `config.h` é privado.
 
 ## Segurança
 
