@@ -28,8 +28,8 @@ String movementPendingPayload;
 #define TALKBACK_KEY   "PREENCHA_LOCALMENTE"
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
-const int pinEntrada  = 13;
-const int pinSaida    = 26;    // GPIO 12 é pino de partida; ver docs/fisica.md, seção 9.5
+const int pinBarreiraA = 13;   // barreira do lado de fora da porta
+const int pinBarreiraB = 26;   // barreira do lado de dentro; GPIO 12 é pino de partida (docs/fisica.md, 9.5)
 const int pinLED_IR   = 2;     // LED simula pulso IR enviado ao AC
 
 #define DHTPIN_EXTERNO 14
@@ -68,8 +68,14 @@ unsigned long inicioModoManual = 0;
 
 // ── Estados ────────────────────────────────────────────────────────────────
 int totalPessoas          = 0;
-int estadoAnteriorEntrada = LOW;
-int estadoAnteriorSaida   = LOW;
+
+// Porta com duas barreiras: o sentido vem da ordem dos cortes (docs/eletronica-digital.md).
+enum EstadoPorta { PORTA_LIVRE, ENTRANDO_A, ENTRANDO_AB, SAINDO_B, SAINDO_BA };
+EstadoPorta estadoPorta = PORTA_LIVRE;
+const unsigned long FILTRO_BARREIRA_MS = 30;   // o contato do relé oscila ao comutar
+int barreiraA = LOW, barreiraB = LOW;          // estado filtrado: HIGH = feixe interrompido
+int brutaA = LOW, brutaB = LOW;
+unsigned long desdeA = 0, desdeB = 0;
 
 float tempInternaAjustada = 0.0;
 bool  primeiraLeitura     = true;
@@ -110,8 +116,8 @@ void setup() {
   Serial.begin(115200);
   delay(300);
 
-  pinMode(pinEntrada, INPUT_PULLUP);   // contato do relé da barreira entre o pino e o GND
-  pinMode(pinSaida,   INPUT_PULLUP);
+  pinMode(pinBarreiraA, INPUT_PULLUP);   // contato do relé da barreira entre o pino e o GND
+  pinMode(pinBarreiraB, INPUT_PULLUP);
   pinMode(pinLED_IR,  OUTPUT);
   digitalWrite(pinLED_IR, LOW);
 
@@ -148,6 +154,11 @@ float calcularTempRecomendada(float tempExterna) {
   return constrain(r, TEMP_AC_MIN, TEMP_AC_MAX);
 }
 
+// Regra do circuito combinacional: F = A · not(C) · (M + B).
+bool podeResfriar() {
+  return modoAtual == MODO_MANUAL || totalPessoas > 0;
+}
+
 // ── Define um novo alvo e dispara pulsos IR proporcionais ──────────────────
 void definirAlvoAC(float novoAlvo, const char* origem) {
   novoAlvo = constrain(novoAlvo, TEMP_AC_MIN, TEMP_AC_MAX);
@@ -160,7 +171,7 @@ void definirAlvoAC(float novoAlvo, const char* origem) {
   tempAlvoAC      = alvoInt;
 
   float desvio = tempInternaAjustada - tempAlvoAC;
-  acLigado = !acForcadoOff && (desvio > TOLERANCIA_AC);
+  acLigado = !acForcadoOff && podeResfriar() && (desvio > TOLERANCIA_AC);
 
   Serial.println(F("\n┌─── COMANDO AO AR-CONDICIONADO ───"));
   Serial.print(F("│ Origem:     ")); Serial.println(origem);
@@ -293,7 +304,7 @@ void passoAC() {
   if (primeiraLeitura) return;
   if (acForcadoOff) { acLigado = false; return; }   // AC_OFF manual ativo
   float desvio = tempInternaAjustada - tempAlvoAC;
-  if (desvio > TOLERANCIA_AC) {
+  if (desvio > TOLERANCIA_AC && podeResfriar()) {
     acLigado = true;
     tempInternaAjustada -= RESFRIAMENTO_POR_SEGUNDO;
     if (tempInternaAjustada < tempAlvoAC) tempInternaAjustada = tempAlvoAC;
@@ -485,23 +496,55 @@ void exibirTotal(const char* acao) {
   Serial.print(F("  Total: ")); Serial.println(totalPessoas);
 }
 
+// Aceita a leitura do pino só depois de FILTRO_BARREIRA_MS estável; devolve true se mudou.
+bool filtrarBarreira(int pino, int& estavel, int& bruta, unsigned long& desde, unsigned long agora) {
+  int lida = digitalRead(pino);
+  if (lida != bruta) { bruta = lida; desde = agora; }
+  if (bruta == estavel || agora - desde < FILTRO_BARREIRA_MS) return false;
+  estavel = bruta;
+  return true;
+}
+
+// Máquina de estados da porta (A = fora, B = dentro); devolve +1 (entrada), -1 (saída) ou 0.
+int passoPorta(bool a, bool b) {
+  if (!a && !b) {
+    int evento = estadoPorta == ENTRANDO_AB ? 1 : estadoPorta == SAINDO_BA ? -1 : 0;
+    estadoPorta = PORTA_LIVRE;
+    return evento;
+  }
+  switch (estadoPorta) {
+    case PORTA_LIVRE:
+      if (a != b) estadoPorta = a ? ENTRANDO_A : SAINDO_B;
+      break;
+    case ENTRANDO_A:
+    case ENTRANDO_AB:
+      estadoPorta = b ? ENTRANDO_AB : ENTRANDO_A;
+      break;
+    case SAINDO_B:
+    case SAINDO_BA:
+      estadoPorta = a ? SAINDO_BA : SAINDO_B;
+      break;
+  }
+  return 0;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 void loop() {
   unsigned long agora = millis();
 
-  // 1) Sensores de presença
-  int eEnt = digitalRead(pinEntrada);
-  int eSai = digitalRead(pinSaida);
-  if (eEnt == HIGH && estadoAnteriorEntrada == LOW) {
-    totalPessoas++; exibirTotal("ENTRADA (+1)");
-    atualizarAutomatico();   // só age se estiver em AUTOMATICO
+  // 1) Barreiras da porta: o sentido vem da ordem dos cortes
+  bool mudouA = filtrarBarreira(pinBarreiraA, barreiraA, brutaA, desdeA, agora);
+  bool mudouB = filtrarBarreira(pinBarreiraB, barreiraB, brutaB, desdeB, agora);
+  if (mudouA || mudouB) {
+    int evento = passoPorta(barreiraA == HIGH, barreiraB == HIGH);
+    if (evento > 0) {
+      totalPessoas++; exibirTotal("ENTRADA (+1)");
+      atualizarAutomatico();   // só age se estiver em AUTOMATICO
+    } else if (evento < 0) {
+      if (totalPessoas > 0) { totalPessoas--; exibirTotal("SAIDA (-1)"); atualizarAutomatico(); }
+      else Serial.println(F("Aviso: sala vazia."));
+    }
   }
-  if (eSai == HIGH && estadoAnteriorSaida == LOW) {
-    if (totalPessoas > 0) { totalPessoas--; exibirTotal("SAIDA (-1)"); atualizarAutomatico(); }
-    else Serial.println(F("Aviso: sala vazia."));
-  }
-  estadoAnteriorEntrada = eEnt;
-  estadoAnteriorSaida   = eSai;
 
   // 2) Calor das pessoas
   if (agora - ultimoCalculoCalor >= intervaloCalor) {
