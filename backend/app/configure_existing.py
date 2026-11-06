@@ -17,11 +17,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.database import SUPABASE_CA, with_local_ca
 from app.security import hash_password
 from app.settings import Settings
 
 BACKEND = Path(__file__).resolve().parents[1]
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+SUPABASE_HOSTS = (".supabase.com", ".supabase.co")
 TLS_OPTIONS = {"sslmode", "sslrootcert"}
 
 
@@ -50,13 +52,19 @@ def connection_url(args: argparse.Namespace, password: str) -> URL:
         if mode not in {"verify-ca", "verify-full"}:
             mode = "verify-full"
         url = url.update_query_dict({"sslmode": mode, "gssencmode": "disable"})
-        if mode == "verify-full" and not url.query.get("sslrootcert"):
-            url = url.update_query_dict({"sslrootcert": "system"})
+        if not url.query.get("sslrootcert"):
+            if url.host.lower().endswith(SUPABASE_HOSTS):
+                # A CA do Supabase é privada e não está no repositório de certificados do sistema.
+                url = url.update_query_dict({"sslrootcert": SUPABASE_CA})
+            elif mode == "verify-full":
+                url = url.update_query_dict({"sslrootcert": "system"})
     return url
 
 
 def migrate_existing(url: URL, publish: Callable[[], None]) -> None:
-    engine = create_engine(url, hide_parameters=True, connect_args={"connect_timeout": 5})
+    engine = create_engine(
+        with_local_ca(url), hide_parameters=True, connect_args={"connect_timeout": 5}
+    )
     try:
         with engine.begin() as connection:
             existing = (

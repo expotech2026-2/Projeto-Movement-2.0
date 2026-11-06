@@ -155,7 +155,10 @@ O comando:
 - aceita como destino apenas `.env` ou `.env.<nome>` em `backend/`, com permissões privadas também para o backup;
 - ao reconfigurar um arquivo, mantém o login que já está gravado nele.
 
-**TLS:** para conexões remotas, o padrão é `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`. A CA do Supabase não vem no repositório de certificados do sistema, então informe em `sslrootcert` o caminho do certificado da CA do Supabase (veja [contexto/estado-atual.md](contexto/estado-atual.md#problemas-conhecidos)).
+**TLS:** conexões remotas usam `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`.
+- **Supabase:** a CA dele é privada ("Supabase Root 2021 CA", válida até 2031) e não vem no repositório de certificados do sistema. Por isso o configurador usa a cópia oficial embutida em `backend/app/certs/supabase-root-2021.crt`.
+- **Outros servidores:** o configurador usa os certificados do sistema.
+- **Caminho relativo:** um `sslrootcert` relativo é procurado a partir da pasta `backend`. Isso funciona também em pastas com acento, que o libpq do Windows não abre por caminho absoluto.
 
 Para executar a API local com o banco do Supabase, na pasta `backend`:
 
@@ -189,6 +192,8 @@ gh secret set ACR_PASSWORD --repo expotech2026-2/Projeto-Movement-2.0
 ```powershell
 ..\.venv\Scripts\python.exe scripts\azure_settings.py https://NOME-DO-APP.azurewebsites.net
 ```
+
+   Um `.env.supabase` gerado antes da CA embutida tem `sslmode=require`: a conexão é criptografada, mas não confere o servidor. Para verificar o certificado, troque na `MOVEMENT_DATABASE_URL` o trecho `sslmode=require` por `sslmode=verify-full&sslrootcert=app%2Fcerts%2Fsupabase-root-2021.crt`.
 
 7. Copie o conteúdo de `backend/.env.azure.json`, que fica fora do Git, para Web App > Settings > Environment variables > Advanced edit:
    - acrescente as entradas às que já existem, sem apagar as `DOCKER_REGISTRY_*`, e aplique;
@@ -445,6 +450,7 @@ backend/
         main.py                          # create_app: rotas de saúde, login e telemetria; inclui os routers
         site.py                          # create_site: API em /api e build do React em / (usado no contêiner)
         settings.py  database.py         # configuração; conexão com search_path por sessão
+        certs/                           # CA raiz do Supabase, usada no verify-full
         models.py  schemas.py            # tabelas (SQLAlchemy 2.0) e contratos da API (Pydantic)
         auth.py  security.py  users.py   # perfis, hash scrypt, sessões assinadas e cadastro de usuários
         dependencies.py  repository.py   # injeção de dependências e repositório da telemetria
