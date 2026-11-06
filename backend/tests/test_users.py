@@ -87,8 +87,14 @@ def test_admin_manages_users_and_sessions_follow_account_changes(context):
     assert client.put(path, headers=admin, json=inactive).json()["active"] is False
     assert client.get("/auth/me", headers=bearer(second)).status_code == 401
     assert login(client, username, "nova-senha-456").status_code == 401
+    reactivated = {**inactive, "active": True}
+    assert client.put(path, headers=admin, json=reactivated).status_code == 200
+    assert client.get("/auth/me", headers=bearer(second)).status_code == 401
+    third = bearer(login(client, username, "nova-senha-456"))
+    assert client.get("/auth/me", headers=third).status_code == 200
     promoted = {"full_name": "Ana Souza", "role": "admin", "active": True}
     assert client.put(path, headers=admin, json=promoted).json()["role"] == "admin"
+    assert client.get("/users", headers=third).status_code == 401
     own = bearer(login(client, username, "nova-senha-456"))
     assert client.get("/users", headers=own).status_code == 200
     demote_self = {"full_name": "Ana Souza", "role": "professor", "active": True}
@@ -97,3 +103,19 @@ def test_admin_manages_users_and_sessions_follow_account_changes(context):
     assert client.delete(path, headers=admin).status_code == 204
     assert client.get("/auth/me", headers=own).status_code == 401
     assert client.delete(path, headers=admin).status_code == 404
+
+
+def test_validation_errors_do_not_echo_passwords(context):
+    client, admin = context["client"], context["operator_headers"]
+    password = "senha-sintetica-" * 20
+    user = {"full_name": "Ana Souza", "role": "professor", "password": password}
+    invalid_responses = (
+        login(client, "admin", password),
+        client.post("/users", headers=admin, json={**user, "username": "ana.souza"}),
+        client.put(f"/users/{uuid4()}", headers=admin, json=user),
+        client.post("/users", headers=admin, json=[user]),
+    )
+    for response in invalid_responses:
+        assert response.status_code == 422
+        assert password not in response.text
+        assert all(set(detail) == {"loc", "msg", "type"} for detail in response.json()["detail"])
