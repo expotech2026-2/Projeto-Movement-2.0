@@ -56,6 +56,7 @@ backend/tests/        Testes com PostgreSQL separado
 database/             Consultas e importação de servidores no pgAdmin
 docs/                 Documentação dos requisitos da ExpoTech (física, pesquisa operacional, arquitetura, eletrônica)
 firmware/             ESP32 do projeto original com envio para FastAPI
+hardware/             Circuitos lógicos (Logisim) e verificação das equações e da lógica da porta
 scripts/              Inicialização e encerramento no Windows
 ```
 
@@ -213,6 +214,8 @@ Cadastre o dispositivo em Salas e aparelhos e guarde o token exibido. Cada sala 
 O token é solicitado sem eco. A leitura publicada por esse comando é simulada; use-o somente no ambiente de desenvolvimento. O fluxo completo é `ESP32 -> POST /telemetry -> PostgreSQL -> FastAPI -> React`.
 
 O firmware mantém a simulação de climatização e os sensores do projeto entregue. Agora publica na API; o envio ThingSpeak/TalkBack fica desativado por padrão. Copie `firmware/climacontrol/config.h.example` para `config.h` e configure URL, token e certificado CA quando usar HTTPS. O arquivo privado é ignorado pelo Git. Nenhuma chave ThingSpeak original foi mantida na versão distribuída.
+
+Na montagem física, a sala tem duas barreiras infravermelhas na mesma porta (A do lado de fora, no GPIO 13; B do lado de dentro, no GPIO 26). O firmware deduz o sentido pela ordem dos cortes com uma máquina de estados e filtra a oscilação do contato do relé (30 ms). No modo automático, o resfriamento só atua com a sala ocupada. Para usar o DHT11 da montagem, inclua `#define MOVEMENT_DHT_TYPE DHT11` no `config.h`; sem essa linha vale o DHT22, que é o modelo do Wokwi. Veja [docs/fisica.md](docs/fisica.md#9-montagem-real) e [docs/eletronica-digital.md](docs/eletronica-digital.md).
 
 Para ESP32 físico, o endereço da API precisa ser alcançável pela rede do dispositivo. Em desenvolvimento de rede local, execute o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. O Wokwi precisa de gateway/túnel para acessar uma API local. O relógio é sincronizado por NTP e cada mensagem usa UUID; reenvios mantêm o mesmo conteúdo até a confirmação. A fila do firmware contém uma mensagem em RAM e não substitui uma fila persistente em flash.
 
