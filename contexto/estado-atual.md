@@ -12,18 +12,11 @@ Atualizado em **07/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 - A imagem de produção (`movement:latest`) está publicada no registro do Azure.
 - O Supabase está configurado: schema `movement` protegido da API pública, catálogo do Inmetro carregado e nenhum alerta de segurança.
 
-## Bloqueado
+## Produção
 
-- **O Web App do Azure está parado e sem variáveis de ambiente.** Depende de quem tem acesso ao portal:
-  1. aplicar as variáveis, trocando na `MOVEMENT_DATABASE_URL` o `sslmode=require` por `sslmode=verify-full&sslrootcert=app%2Fcerts%2Fsupabase-root-2021.crt`;
-  2. dar Start (com plano B1 se o F1 estourar a cota);
-  3. ligar o Continuous deployment;
-  4. configurar o Health check em `/api/health`.
-- No primeiro início, o contêiner leva o banco da migração `0003` para a `0005_alerts`.
-- Depois de ligado, falta testar o site público:
-  - `/api/health` e `/api/ready`;
-  - o site em `/` e a documentação em `/api/docs`;
-  - uma rota protegida sem login, que deve responder 401.
+- O site está no ar em <https://movement-gxdafrgwcjd9f7gx.westus3-01.azurewebsites.net>: `/api/health` e `/api/ready` respondiam 200 em 07/11/2026.
+- Ao subir a versão da `Devlop`, o contêiner leva o Supabase da migração `0005_alerts` para a `0006_room_control`. Se a imagem nova não entrar sozinha, falta ligar o Continuous deployment no portal.
+- O ESP32 fala com o site em HTTPS usando a raiz DigiCert Global Root G2 no `MOVEMENT_CA_CERT`.
 
 ## Partes manuais pendentes 👤
 
@@ -36,9 +29,7 @@ Atualizado em **07/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 
 ## Problemas conhecidos
 
-- **Segredos de produção na `Devlop`:** o commit `8feb992` incluiu `backend/variaveis-azure.json` com os valores reais (senha do banco, chave de sessão e hash do administrador). A equipe decidiu removê-lo depois. Até lá:
-  - não mesclar a `Devlop` na `main`, porque o arquivo entraria na imagem Docker;
-  - ao remover, trocar os segredos, porque eles continuam no histórico do Git.
+- **Segredos no histórico do Git:** o commit `8feb992` incluiu `backend/variaveis-azure.json` com os valores reais (senha do banco, chave de sessão e hash do administrador). O arquivo saiu do repositório em 07/11/2026 e está no `.gitignore` e no `.dockerignore`, mas os valores continuam no histórico. Falta trocar a senha do banco no Supabase e a `MOVEMENT_SESSION_SECRET` no Azure.
 - **Issues com texto antigo:** a #3 foi fechada com 8 dos 11 critérios pendentes. As issues #4 a #7 e #11 descrevem estados anteriores (a #6 cita a migração 0004; a #7, o desenho antigo com sensores PIR). Vale o código.
 - **Branches antigas:** `feat/5-calculos-fisica`, `feat/6-arquitetura-padroes`, `feat/7-circuito-logisim`, `Test` e `3-etapa-3-deploy-no-azure-com-cicd` já estão inteiras na `main` e podem ser apagadas.
 - **Cópia no OneDrive:** a pasta do projeto no OneDrive não funciona com git e está desatualizada. Trabalhe num clone fora do OneDrive.
