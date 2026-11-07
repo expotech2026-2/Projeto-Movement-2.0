@@ -18,7 +18,7 @@ feat/<n>-… ─PR─▶ Devlop ─PR─▶ main ─CI─▶ imagem no registro 
 1. Em toda branch, o CI (`.github/workflows/ci.yml`) roda quatro jobs:
    - **backend:** ruff e pytest;
    - **frontend:** lint, testes e build;
-   - **firmware:** lógica da porta e equações;
+   - **firmware:** lógica da porta, comandos IR e equações;
    - **image:** build da imagem Docker.
 2. Só um push na `main` publica a imagem `movement`, com as tags `latest` e o SHA do commit, no Azure Container Registry.
 3. O deploy contínuo do Web App puxa a nova `latest` e reinicia o contêiner.

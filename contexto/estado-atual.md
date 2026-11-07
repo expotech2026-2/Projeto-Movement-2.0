@@ -1,12 +1,14 @@
 # Estado atual
 
-Atualizado em **06/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **07/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
 
 ## Pronto
 
 - As etapas 1 a 7 estão implementadas e mescladas na `Devlop` e na `main`.
 - A conexão com o Supabase verifica o certificado (`verify-full`) com a CA oficial embutida em `backend/app/certs/`.
-- Verificações passando: testes de backend e de frontend, build, lint, lógica da porta e build da imagem. O CI da `main` está verde.
+- Verificações passando: testes de backend e de frontend, build, lint, lógica da porta, comandos IR e build da imagem. O CI da `main` está verde.
+- O firmware está pronto para a montagem real: Wi-Fi no `config.h`, temperatura interna lida do DHT, porta numa tarefa própria (não perde passagens durante o envio) e comando IR no protocolo do fabricante (IRremoteESP8266), com `IR_TESTE` para descobrir o protocolo. O aparelho desliga quando a sala esvazia no modo automático.
+- Controle pelo site: professores e administradores fixam a temperatura (16 a 30 °C) ou desligam o aparelho por 2 h, e o ESP32 busca o comando. No automático, o alvo usa o calor do corpo humano (36,5 °C) e a faixa da NR-17 (18 a 25 °C). A temperatura externa vem da Open-Meteo pela cidade da unidade. Isso traz a migração `0006_room_control`, aplicada pelo contêiner ao subir.
 - A imagem de produção (`movement:latest`) está publicada no registro do Azure.
 - O Supabase está configurado: schema `movement` protegido da API pública, catálogo do Inmetro carregado e nenhum alerta de segurança.
 
@@ -27,6 +29,8 @@ Atualizado em **06/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 
 - **#5:** medir no Wokwi a duração real do envio, que alimenta a energia por envio da Pesquisa Operacional.
 - **#7:** montar os circuitos no Logisim Evolution e anexar os prints (`docs/eletronica-digital.md`, seção 11).
+- Cadastrar a cidade de cada unidade (tela Unidades e salas) para o ESP32 receber a temperatura externa.
+- Gravar o firmware no ESP32 e testar com o ar-condicionado da demonstração: `IR_TESTE` para achar o protocolo, `IR <nome>` para gravar, depois entrar e sair pela porta e ver o aparelho ligar e desligar. O firmware com a IRremoteESP8266 ainda não foi compilado.
 - Montar o circuito físico e testar as barreiras reais. O firmware nunca foi gravado num ESP32 de verdade.
 - Confirmar com os professores que o Supabase vale como banco gerenciado e o Wokwi como simulação do circuito.
 

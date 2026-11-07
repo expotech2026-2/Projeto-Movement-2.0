@@ -177,6 +177,8 @@ Grupos: $(m_{12}, m_{13}) = A\,B\,\overline{C}$ e $(m_9, m_{13}) = A\,\overline{
 
 > Em relação ao firmware original, a regra é nova: no modo automático, o resfriamento só atua com a sala ocupada. Isso evita gastar energia com a sala vazia e deixa o software igual ao circuito.
 
+O termo $\overline{C}\,(M + B)$ sozinho diz se o aparelho fica ligado. O firmware manda pelo LED IR o comando de ligar quando esse termo passa a 1 e o de desligar quando volta a 0, por exemplo quando a última pessoa sai no modo automático. $A$ só decide se o compressor resfria.
+
 ## 7. Equivalência com o firmware
 
 ```c
@@ -193,7 +195,11 @@ int passoPorta(bool a, bool b) {          // seção 3
 bool podeResfriar() {                     // seção 6: (M + B)
   return modoAtual == MODO_MANUAL || totalPessoas > 0;
 }
-// passoAC(): if (desvio > TOLERANCIA_AC && podeResfriar())   →  A · (M + B), com C tratado antes
+
+bool acDeveFicarLigado() {                // seção 6: not(C) · (M + B), liga ou desliga pelo IR
+  return !acForcadoOff && podeResfriar();
+}
+// atualizarResfriamento(): acDeveFicarLigado() && desvio > TOLERANCIA_AC  →  A · not(C) · (M + B)
 ```
 
 O script `hardware/logica/verificar_logica.py` implementa a mesma especificação de `passoPorta()` (`door_spec`) e confere que as equações dos flip-flops a reproduzem.
@@ -239,12 +245,12 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
    Deixe de fora a linha `MOVEMENT_DHT_TYPE DHT11`, porque o Wokwi simula o DHT22.
 3. **Token:** no plano gratuito, o Wokwi só salva projetos **públicos**. Cole o token só para rodar e **não salve** depois. O projeto salvo fica sempre com `PREENCHA_LOCALMENTE`.
 4. **Velocidade:** mantenha a janela do navegador visível. Com a aba em segundo plano, a simulação cai para poucos por cento do tempo real. O `millis()` simulado não acompanha a rede, e o tempo medido no `[Movement] HTTP ... em N ms` sai baixo demais.
-5. **Entrada:** clique em "Barreira A (fora)" e, menos de 2 s depois, em "Barreira B (dentro)". Quando os dois voltarem a 0, o monitor serial mostra `[PRESENCA] ENTRADA (+1)`.
-6. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`.
-7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "ALTERANDO".
+5. **Entrada:** clique em "Barreira A (fora)" e, menos de 2 s depois, em "Barreira B (dentro)". Quando os dois voltarem a 0, o monitor serial mostra `[PRESENCA] ENTRADA (+1)`. Na primeira entrada, o LED acende por 0,8 s e aparece `[IR] LIGAR (800 ms)`.
+6. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`. Quando a última pessoa sai, o LED acende por 1,5 s e aparece `[IR] DESLIGAR (1500 ms)`.
+7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "RESFRIANDO".
 8. **Modo manual (entrada M):** digite no campo do monitor serial e tecle Enter.
-   - `22` (ou outra temperatura de 18 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
-   - `AC_OFF`: força o compressor desligado ($\overline{C}$ = 0).
+   - `22` (ou outra temperatura de 16 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
+   - `AC_OFF`: força o compressor desligado ($\overline{C}$ = 0) e manda `[IR] DESLIGAR`.
    - `AUTO`: volta ao automático.
 
 ## 10. Verificação automatizada
@@ -252,7 +258,7 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
 ```bash
 python hardware/logica/verificar_logica.py            # OK: ... conferidas
 python hardware/logica/verificar_logica.py --markdown # tabelas desta página
-python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta
+python hardware/logica/testar_firmware.py             # OK: porta, comandos IR e conforto
 ```
 
 `verificar_logica.py` confere:
@@ -263,7 +269,9 @@ python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta
 - as 64 transições do contador;
 - as 16 combinações de $F$ (especificação × forma mínima).
 
-`testar_firmware.py` extrai `passoPorta()` e `filtrarBarreira()` do próprio `sketch.ino`, compila com `hardware/logica/teste_porta.cpp` (com `-Wall -Wextra -Werror`) e roda as mesmas sequências chamando a lógica a cada 10 ms, como o `loop()`. Cada sequência roda sem ruído e com o contato oscilando duas vezes antes de assentar (13 cenários). O único caso excluído com ruído é o dos dois feixes cortados ao mesmo tempo, que não tem ordem definida. Os dois scripts rodam no job `firmware` da CI.
+`testar_firmware.py` extrai `passoPorta()` e `filtrarBarreira()` do próprio `sketch.ino`, compila com `hardware/logica/teste_porta.cpp` (com `-Wall -Wextra -Werror`) e roda as mesmas sequências chamando a lógica a cada 10 ms, como o `loop()`. Cada sequência roda sem ruído e com o contato oscilando duas vezes antes de assentar (13 cenários). O único caso excluído com ruído é o dos dois feixes cortados ao mesmo tempo, que não tem ordem definida.
+
+O mesmo script extrai `podeResfriar()`, `acDeveFicarLigado()`, `estadoNovoParaEnviar()` e `proximoComandoIR()` e confere, com `hardware/logica/teste_ir.cpp`, 22 passos: nos pulsos simulados, ligar na primeira entrada, subir e baixar 1 °C por pulso, desligar quando a sala esvazia ou com `AC_OFF` e não mexer no alvo com o aparelho desligado; no protocolo real, um quadro só por mudança, com o estado inteiro. Os dois scripts rodam no job `firmware` da CI.
 
 ## 11. Prints
 

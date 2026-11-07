@@ -127,29 +127,54 @@ O módulo HC-SR501 físico precisa de **4,5 a 20 V** na alimentação. Numa plac
 
 No Wokwi, o PIR funciona em 3,3 V por simplificação da simulação. Na montagem da equipe, os PIR são substituídos por barreiras infravermelhas (seção 9.2).
 
-## 8. Modelo térmico da sala (complementar)
+## 8. Modelo térmico da sala e alvo do ar-condicionado
 
-O firmware simula o aquecimento causado pelas pessoas na sala (`calcularDeltaTemperatura()` em `sketch.ino`): parte do calor emitido pelas pessoas aquece a massa de ar da sala.
+O firmware calcula quanto as pessoas aquecem a sala a partir da **temperatura média do corpo humano** e usa esse valor no alvo do modo automático (`calorPorPessoa()`, `aquecimentoPessoas()` e `calcularTempRecomendada()` em `sketch.ino`, testadas por `hardware/logica/teste_conforto.cpp`).
 
-$$\Delta T = \frac{P \cdot t \cdot f}{m \cdot c}, \qquad m = \rho \cdot V_{sala}$$
+**Calor de uma pessoa.** O corpo perde calor sensível para o ar na proporção da diferença de temperatura entre os dois:
+
+$$P = k \cdot (T_{corpo} - T_{ar})$$
 
 | Símbolo | Valor | Significado |
 | --- | --- | --- |
-| $P$ | 150 W por pessoa | Calor emitido por uma pessoa em repouso |
-| $t$ | 10 s | Intervalo do cálculo (`intervaloCalor`) |
+| $T_{corpo}$ | 36,5 °C | Temperatura média do corpo humano (`TEMP_CORPO`) |
+| $k$ | 5,6 W/K | Condutância entre o corpo e o ar (`CONDUTANCIA_PESSOA`): dá 70 W de calor sensível com o ar a 24 °C, valor típico de uma pessoa sentada em trabalho leve |
+| $T_{ar}$ | leitura do DHT | Temperatura da sala |
+
+Com o ar a 24 °C, $P = 5{,}6 \times (36{,}5 - 24) = 70\ \text{W}$. Com o ar a 30 °C, cai para 36,4 W, porque o corpo passa a perder mais calor pelo suor, que não aquece o ar. Com o ar na temperatura do corpo, $P = 0$.
+
+**Aquecimento do ar.** Parte desse calor fica no ar da sala:
+
+$$\Delta T = \frac{n \cdot P \cdot t \cdot f}{m \cdot c}, \qquad m = \rho \cdot V_{sala}$$
+
+| Símbolo | Valor | Significado |
+| --- | --- | --- |
+| $n$ | contagem da porta | Pessoas na sala |
+| $t$ | 600 s | Horizonte da previsão (`HORIZONTE_PREVISAO_S`) |
 | $f$ | 0,3 | Fração do calor retida no ar (`FATOR_RETENCAO`) |
 | $\rho$ | 1,2 kg/m³ | Densidade do ar |
 | $V_{sala}$ | 50 m³ | Volume da sala |
 | $m$ | $1{,}2 \times 50 = 60\ \text{kg}$ | Massa de ar |
 | $c$ | 1005 J/(kg·K) | Calor específico do ar |
 
-- **1 pessoa:**
+- **1 pessoa, ar a 24 °C:** $\Delta T = \dfrac{1 \times 70 \times 600 \times 0{,}3}{60 \times 1005} = \dfrac{12\,600}{60\,300} \approx 0{,}21\ \text{K}$ em 10 min.
+- **10 pessoas:** $\approx 2{,}09\ \text{K}$ em 10 min.
 
-$$\Delta T = \frac{150 \times 10 \times 0{,}3}{60 \times 1005} = \frac{450}{60\,300} \approx 0{,}0075\ \text{K a cada 10 s} \;(\approx 0{,}045\ \text{K/min})$$
+**Alvo do modo automático.** O alvo desconta o aquecimento previsto para os próximos 10 minutos e fica dentro da faixa da **NR-17** (item 17.8.4.2, Portaria MTP nº 423/2021): de 18 a 25 °C em ambientes climatizados.
 
-- **30 pessoas:** $\Delta T \approx 0{,}224\ \text{K}$ a cada 10 s (≈ 1,3 K/min).
+$$T_{alvo} = T_{base} - \Delta T_{10\ \text{min}}, \qquad 18\ ^\circ\text{C} \le T_{alvo} \le 25\ ^\circ\text{C}$$
 
-**Conclusão:** com a sala cheia, a temperatura muda cerca de 30 vezes mais rápido do que com uma pessoa. Uma sala cheia precisa de leituras mais frequentes, e uma sala vazia pode ser lida com menos frequência. Essa taxa de variação é o parâmetro $r_h$ do modelo de Pesquisa Operacional.
+- $T_{base}$ = 24 °C; 23 °C com mais de 30 °C lá fora; 25,5 °C com menos de 22 °C. A temperatura externa vem da Open-Meteo, pela cidade da unidade.
+- O aparelho recebe o alvo arredondado: 21,9 °C vira 22 °C.
+- O comando manual do professor aceita de 16 a 30 °C e vale por 2 horas.
+
+| Pessoas (ar a 24 °C, externa a 25 °C) | 0 | 1 | 5 | 10 | 20 | 30 |
+| --- | --- | --- | --- | --- | --- | --- |
+| $\Delta T$ em 10 min (K) | 0 | 0,21 | 1,04 | 2,09 | 4,18 | 6,27 |
+| Alvo calculado (°C) | 24 | 23,8 | 23,0 | 21,9 | 19,8 | 18 (limite da NR-17) |
+| Alvo enviado ao aparelho (°C) | 24 | 24 | 23 | 22 | 20 | 18 |
+
+**Conclusão:** com 30 pessoas, o ar aquece cerca de 30 vezes mais rápido do que com uma. Uma sala cheia precisa de leituras mais frequentes, e uma sala vazia pode ser lida com menos frequência. Essa taxa de variação é o parâmetro $r_h$ do modelo de Pesquisa Operacional.
 
 ## 9. Montagem real
 
@@ -282,6 +307,8 @@ Valores conferidos em 06/11/2026 nos documentos abaixo:
   - $P_D$ de 625 mW a 25 °C.
   - $h_{FE}$ com 2 mA: grupo A de 110 a 220, B de 200 a 450 e C de 420 a 800.
   - $V_{CE(sat)}$ no máximo 0,25 V com 10 mA e 0,6 V com 100 mA.
+- **NR-17 (Ergonomia):** redação da Portaria MTP nº 423, de 07/10/2021, em vigor desde 03/01/2022. O item 17.8.4.2 pede temperatura do ar entre 18 e 25 °C em ambientes climatizados (conferido em 07/11/2026). <https://abrava.com.br/wp-content/uploads/2021/11/NR-17-ERGONOMIA-ALERTA-SOBRE-EDICAO-FINAL-Comite-Nrs-1.pdf>
+- **Calor dos ocupantes:** ASHRAE Handbook, *Fundamentals*, tabela de ganho de calor por ocupantes: pessoa sentada em trabalho leve, cerca de 70 W de calor sensível.
 - **iPEC IR15 Mini:** manual do sensor e anúncios do produto, com alimentação, consumo e contatos do relé. <https://www.cftvclube.com.br/alarmes/mini-sensor-de-barreira-ipec-ir-15-feixe-simples-infravermelho-15-metros>
 - **HC-SR501:** datasheet do módulo, distribuído por MPJA e Electrodragon. <https://courses.ece.cornell.edu/ece5990/ECE5725_Spring2020_Projects/May_15_Demo/Smart%20Lock/W_pp445_yl656/datasheet/31227sc.pdf>
   - Alimentação de 4,5 a 20 V, saída de 3,3 V e corrente estática menor que 50 µA.

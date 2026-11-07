@@ -34,6 +34,10 @@ class Unit(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     address: Mapped[str] = mapped_column(String(160), default="", server_default="")
+    # Cidade da unidade: a temperatura externa vem da Open-Meteo pelas coordenadas.
+    city: Mapped[str] = mapped_column(String(120), default="", server_default="")
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
 
 
 class Room(Base):
@@ -43,7 +47,19 @@ class Room(Base):
     name: Mapped[str] = mapped_column(String(120))
     location: Mapped[str] = mapped_column(String(120), default="", server_default="")
     capacity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
-    __table_args__ = (CheckConstraint("capacity BETWEEN 1 AND 10000", name="ck_room_capacity"),)
+    # Último comando do ar-condicionado dado pelo site; o ESP32 o busca pela versão.
+    ac_mode: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto")
+    ac_target: Mapped[int | None] = mapped_column(Integer)
+    ac_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    ac_changed_by: Mapped[str | None] = mapped_column(String(60))
+    ac_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        CheckConstraint("capacity BETWEEN 1 AND 10000", name="ck_room_capacity"),
+        CheckConstraint("ac_mode IN ('auto', 'manual', 'off')", name="ck_room_ac_mode"),
+        CheckConstraint(
+            "ac_target IS NULL OR ac_target BETWEEN 16 AND 30", name="ck_room_ac_target"
+        ),
+    )
 
 
 class User(Base):

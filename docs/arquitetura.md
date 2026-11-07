@@ -22,18 +22,22 @@ Os níveis 1 e 2 usam `flowchart` com a notação do C4: o tipo de cada elemento
 ```mermaid
 flowchart LR
   admin["<b>Administrador</b><br/>[Pessoa]<br/>Cadastra unidades, salas,<br/>aparelhos, sensores e usuários"]
-  prof["<b>Professor</b><br/>[Pessoa]<br/>Consulta salas, leituras,<br/>alertas e relatórios"]
+  prof["<b>Professor</b><br/>[Pessoa]<br/>Consulta salas e relatórios;<br/>fixa a temperatura ou desliga"]
   esp["<b>Controlador ESP32</b><br/>[Sistema externo]<br/>Barreiras IR na porta e DHT11;<br/>decide o resfriamento"]
   movement["<b>Movement</b><br/>[Sistema]<br/>Gestão de climatização das salas"]
+  meteo["<b>Open-Meteo</b><br/>[Sistema externo]<br/>Temperatura externa<br/>por cidade"]
+  ac["<b>Ar-condicionado</b><br/>[Sistema externo]"]
   admin -- "Usa<br/>[HTTPS]" --> movement
   prof -- "Usa<br/>[HTTPS]" --> movement
-  esp -- "Envia leituras e<br/>consulta o intervalo<br/>[HTTPS + token]" --> movement
+  esp -- "Envia leituras, consulta o<br/>intervalo e o comando<br/>[HTTPS + token]" --> movement
+  movement -- "Consulta o clima<br/>[HTTPS]" --> meteo
+  esp -- "Código do fabricante<br/>[IR 38 kHz]" --> ac
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
   classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
   class admin,prof person
   class movement system
-  class esp external
+  class esp,meteo,ac external
 ```
 
 ## 3. C4 nível 2 — Contêineres
@@ -47,16 +51,18 @@ flowchart LR
     api["<b>API</b><br/>[Contêiner: Python + FastAPI]<br/>Autenticação, telemetria, alertas,<br/>retenção, otimização"]
   end
   db[("<b>Banco</b><br/>[PostgreSQL 17 no Supabase]<br/>Schema movement")]
+  meteo["<b>Open-Meteo</b><br/>[Sistema externo]"]
   user -- "Usa<br/>[HTTPS]" --> spa
   spa -- "Chama /api<br/>[JSON/HTTPS]" --> api
-  esp -- "POST /api/telemetry<br/>GET /api/devices/me/sampling-interval<br/>[HTTPS + token]" --> api
+  esp -- "POST /api/telemetry<br/>GET /api/devices/me/sampling-interval<br/>GET /api/devices/me/control<br/>[HTTPS + token]" --> api
+  api -- "Clima por cidade<br/>[HTTPS]" --> meteo
   api -- "Lê e grava<br/>[SQL com TLS]" --> db
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
   classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
   class user person
   class spa,api,db container
-  class esp external
+  class esp,meteo external
   style az fill:none,stroke:#888888,stroke-dasharray:6 4
 ```
 
@@ -77,6 +83,8 @@ flowchart LR
     reports["reports.py<br/>relatório PDF"]
     sampling["sampling.py<br/>plano de leitura"]
     events["events.py<br/>alertas (Observer)"]
+    control["control.py<br/>comando do professor"]
+    climate["climate.py<br/>clima externo (Open-Meteo)"]
     deps["dependencies.py<br/>sessão, perfis, dispositivo, repositório"]
     auth["auth.py + security.py<br/>login, hash, sessão assinada"]
     repo["repository.py<br/>TelemetryRepository"]
@@ -86,15 +94,16 @@ flowchart LR
   end
   db[("PostgreSQL<br/>schema movement")]
   site --> main
-  main --> mgmt & users & catalog & reports & sampling & events
-  main --> deps & repo & retention
-  mgmt --> deps & retention
+  main --> mgmt & users & catalog & reports & sampling & events & control
+  main --> deps & repo & retention & climate
+  mgmt --> deps & retention & climate
+  control --> deps & mgmt & climate
   users --> deps & auth
   catalog --> deps
   reports --> deps & repo & retention & catalog
   sampling --> deps & opt & repo
   events --> deps & repo
-  deps --> auth & repo
+  deps --> auth & repo & climate
   repo --> models
   auth --> models
   models --> db

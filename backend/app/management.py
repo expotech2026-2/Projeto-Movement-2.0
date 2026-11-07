@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.dependencies import Db, require_admin, require_user
+from app.climate import ClimateService, ClimateUnavailable
+from app.dependencies import Climate, Db, require_admin, require_user
 from app.models import DEFAULT_UNIT_ID, DEFAULT_UNIT_NAME, AirConditioner, Device, Room, Unit
 from app.retention import monthly_history
 from app.security import hash_device_token
@@ -21,12 +22,15 @@ class UnitInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=120)
     address: str = Field(default="", max_length=160)
+    city: str = Field(default="", max_length=120)
 
 
 class UnitOutput(UnitInput):
     model_config = ConfigDict(from_attributes=True)
     id: str
     room_count: int = 0
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class RoomInput(BaseModel):
@@ -115,11 +119,35 @@ def default_unit(session: Session) -> Unit:
     return unit
 
 
+def locate_unit(unit: Unit, climate: ClimateService) -> None:
+    """Grava as coordenadas da cidade, usadas para buscar a temperatura externa."""
+    if not unit.city:
+        unit.latitude = unit.longitude = None
+        return
+    try:
+        place = climate.locate(unit.city)
+    except ClimateUnavailable:
+        raise HTTPException(
+            503, "Serviço de localização indisponível; tente de novo em instantes"
+        ) from None
+    if place is None:
+        raise HTTPException(422, "Cidade não encontrada")
+    unit.latitude, unit.longitude = place.latitude, place.longitude
+
+
 def create_management_router() -> APIRouter:
     router = APIRouter(dependencies=[Depends(require_user)], tags=["Unidades e salas"])
 
     def unit_output(unit: Unit, room_count: int) -> UnitOutput:
-        return UnitOutput(id=unit.id, name=unit.name, address=unit.address, room_count=room_count)
+        return UnitOutput(
+            id=unit.id,
+            name=unit.name,
+            address=unit.address,
+            city=unit.city,
+            latitude=unit.latitude,
+            longitude=unit.longitude,
+            room_count=room_count,
+        )
 
     def room_count(session: Session, unit_id: str) -> int:
         return session.scalar(select(func.count()).where(Room.unit_id == unit_id))
@@ -135,17 +163,21 @@ def create_management_router() -> APIRouter:
         return [unit_output(unit, count) for unit, count in rows]
 
     @router.post("/units", response_model=UnitOutput, status_code=201, dependencies=Admin)
-    def create_unit(payload: UnitInput, session: Db):
+    def create_unit(payload: UnitInput, session: Db, climate: Climate):
         unit = Unit(id=f"unidade-{uuid4().hex[:16]}", **payload.model_dump())
+        locate_unit(unit, climate)
         session.add(unit)
         commit(session, "Já existe uma unidade com este nome")
         return unit_output(unit, 0)
 
     @router.put("/units/{unit_id}", response_model=UnitOutput, dependencies=Admin)
-    def update_unit(unit_id: str, payload: UnitInput, session: Db):
+    def update_unit(unit_id: str, payload: UnitInput, session: Db, climate: Climate):
         unit = get_unit(session, unit_id)
+        moved = payload.city != unit.city or (unit.city and unit.latitude is None)
         for field, value in payload.model_dump().items():
             setattr(unit, field, value)
+        if moved:
+            locate_unit(unit, climate)
         commit(session, "Já existe uma unidade com este nome")
         return unit_output(unit, room_count(session, unit.id))
 
