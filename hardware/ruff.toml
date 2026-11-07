@@ -1,0 +1,6 @@
+# Mesmas regras do backend (backend/pyproject.toml) para os scripts de verificação da lógica.
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E", "F", "I"]
