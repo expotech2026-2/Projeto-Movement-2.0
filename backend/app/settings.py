@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     retention_interval_seconds: int = Field(default=3600, ge=60, le=86400)
     energy_per_send_j: float = Field(default=0.32, gt=0, le=100)
     sampling_budget_ratio: float = Field(default=0.5, gt=0, le=1)
+    openweather_api_key: SecretStr | None = None
 
     @field_validator("database_url")
     @classmethod

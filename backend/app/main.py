@@ -13,7 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import authenticate, issue_principal_session
 from app.catalog import create_catalog_router
-from app.climate import OpenMeteoClimate
+from app.cities import IbgeCities, create_cities_router
+from app.climate import OpenMeteoClimate, OpenWeatherMapWeather
 from app.control import create_control_router
 from app.database import build_session_factory
 from app.dependencies import CurrentUser, Db, Repository, require_device, require_user
@@ -63,7 +64,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = config
     app.state.sessions = sessions
     app.state.telemetry_events = default_subject()
-    app.state.climate = OpenMeteoClimate()
+    key = config.openweather_api_key
+    backups = [OpenWeatherMapWeather(key.get_secret_value())] if key else []
+    app.state.climate = OpenMeteoClimate(backups=backups)
+    app.state.cities = IbgeCities()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -186,4 +190,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_sampling_router())
     app.include_router(create_alerts_router())
     app.include_router(create_control_router())
+    app.include_router(create_cities_router())
     return app

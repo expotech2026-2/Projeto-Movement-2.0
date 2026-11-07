@@ -619,7 +619,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       value: number(outside?.temperature),
       unit: "°C",
       detail: outside
-        ? `${outside.city} · Open-Meteo`
+        ? `${outside.city} · ${outside.source}`
         : control.loading
           ? "Consultando o clima…"
           : "Cadastre a cidade da unidade",
