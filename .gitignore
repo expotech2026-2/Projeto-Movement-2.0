@@ -19,3 +19,4 @@ playwright-report/
 .DS_Store
 Thumbs.db
 firmware/**/config.h
+variaveis-azure.json
