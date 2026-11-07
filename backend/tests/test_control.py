@@ -123,11 +123,11 @@ def test_unit_city_gives_the_device_the_outside_temperature(context, climate):
     unit = client.put(
         f"/units/{context['unit']}",
         headers=headers,
-        json={"name": f"Unidade Campinas {context['room']}", "city": "Campinas"},
+        json={"name": f"Unidade Campinas {context['room']}", "city": "campinas"},
     )
     assert unit.status_code == 200
     assert (unit.json()["city"], unit.json()["latitude"]) == ("Campinas", -22.9056)
-    assert climate.located == ["Campinas"]
+    assert climate.located == ["campinas"]
 
     renamed = client.put(
         f"/units/{context['unit']}",
@@ -135,7 +135,7 @@ def test_unit_city_gives_the_device_the_outside_temperature(context, climate):
         json={"name": f"Unidade Centro {context['room']}", "city": "Campinas"},
     )
     assert renamed.status_code == 200
-    assert climate.located == ["Campinas"]
+    assert climate.located == ["campinas"]
 
     device = client.get("/devices/me/control", headers=context["device_headers"]).json()
     assert (device["temp_outside"], device["humidity_outside"]) == (31.5, 48.0)

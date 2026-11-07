@@ -120,7 +120,7 @@ def default_unit(session: Session) -> Unit:
 
 
 def locate_unit(unit: Unit, climate: ClimateService) -> None:
-    """Grava as coordenadas da cidade, usadas para buscar a temperatura externa."""
+    """Grava o nome oficial e as coordenadas da cidade, usadas para a temperatura externa."""
     if not unit.city:
         unit.latitude = unit.longitude = None
         return
@@ -132,7 +132,7 @@ def locate_unit(unit: Unit, climate: ClimateService) -> None:
         ) from None
     if place is None:
         raise HTTPException(422, "Cidade não encontrada")
-    unit.latitude, unit.longitude = place.latitude, place.longitude
+    unit.city, unit.latitude, unit.longitude = place.name, place.latitude, place.longitude
 
 
 def create_management_router() -> APIRouter:

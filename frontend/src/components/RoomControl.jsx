@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { roomControl, setRoomControl } from "../services/movementApi";
+import { useState } from "react";
 
 const MODES = {
   auto: { label: "Automático", tone: "success" },
@@ -12,8 +11,6 @@ const hour = (value) =>
     hour: "2-digit",
     minute: "2-digit",
   });
-const decimal = (value) =>
-  Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 function describe(control) {
   if (control.mode === "manual")
@@ -23,36 +20,19 @@ function describe(control) {
   return "O alvo segue a ocupação, o calor das pessoas e a temperatura externa, dentro da faixa da NR-17 (18 a 25 °C).";
 }
 
-export function RoomControl({ roomId, refresh }) {
-  const [result, setResult] = useState({
-    roomId: null,
-    control: null,
-    error: "",
-  });
+export function RoomControl({ state }) {
+  const { control, error, loading, send } = state;
   const [target, setTarget] = useState("22");
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    roomControl(roomId)
-      .then((control) => {
-        if (active) setResult({ roomId, control, error: "" });
-      })
-      .catch((error) => {
-        if (active) setResult({ roomId, control: null, error: error.message });
-      });
-    return () => {
-      active = false;
-    };
-  }, [roomId, refresh]);
-
-  async function send(command) {
+  async function run(command) {
     setBusy(true);
+    setFailure("");
     try {
-      const control = await setRoomControl(roomId, command);
-      setResult({ roomId, control, error: "" });
-    } catch (error) {
-      setResult((previous) => ({ ...previous, error: error.message }));
+      await send(command);
+    } catch (problem) {
+      setFailure(problem.message);
     } finally {
       setBusy(false);
     }
@@ -60,12 +40,11 @@ export function RoomControl({ roomId, refresh }) {
 
   function fix(event) {
     event.preventDefault();
-    send({ mode: "manual", target: Number(target) });
+    run({ mode: "manual", target: Number(target) });
   }
 
-  const { control, error } = result;
-  const loading = result.roomId !== roomId;
   const mode = control ? MODES[control.mode] : null;
+  const message = failure || error;
 
   return (
     <section className="panel chart-panel room-control">
@@ -108,26 +87,21 @@ export function RoomControl({ roomId, refresh }) {
             <button
               className="button secondary"
               disabled={busy || control?.mode === "off"}
-              onClick={() => send({ mode: "off" })}
+              onClick={() => run({ mode: "off" })}
             >
               Desligar
             </button>
             <button
               className="button secondary"
               disabled={busy || control?.mode === "auto"}
-              onClick={() => send({ mode: "auto" })}
+              onClick={() => run({ mode: "auto" })}
             >
               Voltar ao automático
             </button>
           </div>
-          <p className="muted">
-            {control?.outside
-              ? `Externa agora em ${control.outside.city}: ${decimal(control.outside.temperature)} °C e ${decimal(control.outside.humidity)}% de umidade (Open-Meteo).`
-              : "Sem temperatura externa: cadastre a cidade da unidade."}
-          </p>
-          {error && (
+          {message && (
             <p className="notice error" role="alert">
-              {error}
+              {message}
             </p>
           )}
         </>
