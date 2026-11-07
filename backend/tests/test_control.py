@@ -21,7 +21,7 @@ class FakeClimate:
 
     def outside(self, latitude, longitude):
         assert (latitude, longitude) == (-22.9056, -47.0608)
-        return Outside(31.5, 48.0)
+        return Outside(31.5, 48.0, "OpenWeatherMap")
 
 
 @pytest.fixture
@@ -144,7 +144,7 @@ def test_unit_city_gives_the_device_the_outside_temperature(context, climate):
         "city": "Campinas - SP",
         "temperature": 31.5,
         "humidity": 48.0,
-        "source": "Open-Meteo",
+        "source": "OpenWeatherMap",
     }
 
 

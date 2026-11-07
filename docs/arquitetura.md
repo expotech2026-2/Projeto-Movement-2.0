@@ -26,18 +26,22 @@ flowchart LR
   esp["<b>Controlador ESP32</b><br/>[Sistema externo]<br/>Barreiras IR na porta e DHT11;<br/>decide o resfriamento"]
   movement["<b>Movement</b><br/>[Sistema]<br/>Gestão de climatização das salas"]
   meteo["<b>Open-Meteo</b><br/>[Sistema externo]<br/>Temperatura externa<br/>por cidade"]
+  owm["<b>OpenWeatherMap</b><br/>[Sistema externo]<br/>Reserva do clima"]
+  ibge["<b>IBGE Localidades</b><br/>[Sistema externo]<br/>Municípios do Brasil"]
   ac["<b>Ar-condicionado</b><br/>[Sistema externo]"]
   admin -- "Usa<br/>[HTTPS]" --> movement
   prof -- "Usa<br/>[HTTPS]" --> movement
   esp -- "Envia leituras, consulta o<br/>intervalo e o comando<br/>[HTTPS + token]" --> movement
   movement -- "Consulta o clima<br/>[HTTPS]" --> meteo
+  movement -- "Se a Open-Meteo falhar<br/>[HTTPS + chave]" --> owm
+  movement -- "Lista as cidades<br/>[HTTPS]" --> ibge
   esp -- "Código do fabricante<br/>[IR 38 kHz]" --> ac
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
   classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
   class admin,prof person
   class movement system
-  class esp,meteo,ac external
+  class esp,meteo,owm,ibge,ac external
 ```
 
 ## 3. C4 nível 2 — Contêineres
@@ -52,17 +56,21 @@ flowchart LR
   end
   db[("<b>Banco</b><br/>[PostgreSQL 17 no Supabase]<br/>Schema movement")]
   meteo["<b>Open-Meteo</b><br/>[Sistema externo]"]
+  owm["<b>OpenWeatherMap</b><br/>[Sistema externo]"]
+  ibge["<b>IBGE Localidades</b><br/>[Sistema externo]"]
   user -- "Usa<br/>[HTTPS]" --> spa
   spa -- "Chama /api<br/>[JSON/HTTPS]" --> api
   esp -- "POST /api/telemetry<br/>GET /api/devices/me/sampling-interval<br/>GET /api/devices/me/control<br/>[HTTPS + token]" --> api
   api -- "Clima por cidade<br/>[HTTPS]" --> meteo
+  api -- "Reserva do clima<br/>[HTTPS + chave]" --> owm
+  api -- "Municípios<br/>[HTTPS]" --> ibge
   api -- "Lê e grava<br/>[SQL com TLS]" --> db
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
   classDef external fill:#8a8a8a,stroke:#6b6b6b,color:#ffffff
   class user person
   class spa,api,db container
-  class esp,meteo external
+  class esp,meteo,owm,ibge external
   style az fill:none,stroke:#888888,stroke-dasharray:6 4
 ```
 
@@ -84,7 +92,8 @@ flowchart LR
     sampling["sampling.py<br/>plano de leitura"]
     events["events.py<br/>alertas (Observer)"]
     control["control.py<br/>comando do professor"]
-    climate["climate.py<br/>clima externo (Open-Meteo)"]
+    climate["climate.py<br/>clima externo (Open-Meteo<br/>e OpenWeatherMap)"]
+    cities["cities.py<br/>municípios (IBGE)"]
     deps["dependencies.py<br/>sessão, perfis, dispositivo, repositório"]
     auth["auth.py + security.py<br/>login, hash, sessão assinada"]
     repo["repository.py<br/>TelemetryRepository"]
@@ -94,8 +103,9 @@ flowchart LR
   end
   db[("PostgreSQL<br/>schema movement")]
   site --> main
-  main --> mgmt & users & catalog & reports & sampling & events & control
+  main --> mgmt & users & catalog & reports & sampling & events & control & cities
   main --> deps & repo & retention & climate
+  cities --> deps
   mgmt --> deps & retention & climate
   control --> deps & mgmt & climate
   users --> deps & auth

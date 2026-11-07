@@ -175,8 +175,9 @@ function UnitFields({ values, update }) {
       </label>
       <p className="field-hint">
         As sugestões são os municípios do Brasil, da API do IBGE, com os de SP
-        primeiro. A temperatura externa das salas vem da Open-Meteo para esta
-        cidade; sem cidade, o ESP32 usa o sensor externo, se houver.
+        primeiro. A temperatura externa das salas vem da Open-Meteo (ou da
+        OpenWeatherMap, se ela falhar) para esta cidade; sem cidade, o ESP32
+        usa o sensor externo, se houver.
       </p>
     </>
   );

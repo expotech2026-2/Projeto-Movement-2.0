@@ -66,6 +66,7 @@ Todas têm o prefixo `MOVEMENT_` e são lidas por `backend/app/settings.py`. O m
 | `MOVEMENT_STALE_AFTER_SECONDS` | Tempo sem leitura até a sala aparecer como desatualizada |
 | `MOVEMENT_RETENTION_ENABLED`, `MOVEMENT_RETENTION_INTERVAL_SECONDS` | Consolidação e limpeza automáticas das leituras |
 | `MOVEMENT_ENERGY_PER_SEND_J`, `MOVEMENT_SAMPLING_BUDGET_RATIO` | Parâmetros da otimização do envio |
+| `MOVEMENT_OPENWEATHER_API_KEY` | Chave da OpenWeatherMap, reserva do clima externo (segredo, opcional) |
 | `WEBSITES_PORT` | Só no Azure: porta do contêiner (8000) |
 
 ## Onde ficam os segredos

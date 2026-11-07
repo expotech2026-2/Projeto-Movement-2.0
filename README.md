@@ -108,6 +108,7 @@ A API lê variáveis de ambiente com o prefixo `MOVEMENT_` (`backend/app/setting
 | `MOVEMENT_RETENTION_INTERVAL_SECONDS` | `3600` | Intervalo entre execuções da retenção |
 | `MOVEMENT_ENERGY_PER_SEND_J` | `0.32` | Energia de um envio do ESP32, em joules |
 | `MOVEMENT_SAMPLING_BUDGET_RATIO` | `0.5` | Fração da energia de referência que o plano de envio pode gastar |
+| `MOVEMENT_OPENWEATHER_API_KEY` | — | Chave grátis da OpenWeatherMap, reserva do clima externo; sem ela, só a Open-Meteo |
 | `WEBSITES_PORT` | — | Só no Azure: porta do contêiner (`8000`) |
 
 O site tem uma única variável opcional, `VITE_API_BASE_URL`, que vale `/api` por padrão (`frontend/.env.example`).
@@ -332,7 +333,7 @@ No painel da sala, professores e administradores podem fixar uma temperatura (16
 
 No automático, o alvo parte de 24 °C, ajusta pela temperatura externa e desconta o aquecimento que as pessoas causam em 10 minutos, calculado pela diferença entre o corpo humano (36,5 °C) e o ar. O resultado fica entre 18 e 25 °C, a faixa da NR-17 (item 17.8.4.2) para ambientes climatizados. Os cálculos estão em [docs/fisica.md](docs/fisica.md#8-modelo-térmico-da-sala-e-alvo-do-ar-condicionado).
 
-**Temperatura externa:** vem da [Open-Meteo](https://open-meteo.com/) (dados CC BY 4.0) para a cidade cadastrada na unidade, sem chave nem custo. O backend guarda as coordenadas ao salvar a unidade e consulta o clima no máximo a cada 15 min por cidade. O plano grátis da Climatempo atende uma cidade só, e as salas ficam em cidades diferentes do estado de São Paulo.
+**Temperatura externa:** vem da [Open-Meteo](https://open-meteo.com/) (dados CC BY 4.0) para a cidade cadastrada na unidade, sem chave nem custo. O backend guarda as coordenadas ao salvar a unidade e consulta o clima no máximo a cada 15 min por cidade. Se ela não responder, a API tenta a [OpenWeatherMap](https://openweathermap.org/) (plano grátis, com a chave em `MOVEMENT_OPENWEATHER_API_KEY`); se as duas falharem, repete o último valor obtido. O painel mostra a cidade e a fonte do número. O plano grátis da Climatempo atende uma cidade só, e as salas ficam em cidades diferentes do estado de São Paulo.
 
 **Sugestões de cidade:** ao digitar a cidade da unidade, o site sugere os municípios do Brasil, com os de SP primeiro. O backend busca a lista na API de localidades do IBGE (`GET /api/cities`) e a guarda na memória por 24 h; nada fica gravado no código nem no banco. A cidade é salva como "Nome - UF", porque há nomes repetidos entre estados, e a UF restringe a busca na Open-Meteo. Sem o IBGE no ar, o campo aceita o nome digitado sem sugestões.
 
