@@ -7,7 +7,7 @@
 | ESP32 DevKit V1 | 1 | Lê os sensores, decide o resfriamento e envia as leituras por Wi-Fi |
 | Barreira infravermelha iPEC IR15 Mini | 2 | Detecta a passagem na **mesma porta**: A do lado de fora, B do lado de dentro |
 | DHT11 | 1 | Temperatura e umidade da sala |
-| LED infravermelho 940 nm | 1 | Simula o comando IR enviado ao ar-condicionado |
+| LED infravermelho 940 nm | 1 | Manda ao ar-condicionado o código do fabricante (ou pulsos simulados) |
 | Transistor NPN BC547 | 1 | Chave do LED (o pino do ESP32 não fornece a corrente do LED) |
 | Resistor 1 kΩ | 1 | Base do BC547 |
 | Resistor 68 Ω | 1 | Limita a corrente do LED a ~51 mA, a partir dos 5 V do pino VIN |
@@ -15,7 +15,7 @@
 | Fonte de 12 V, 0,5 A ou mais | 1 | Alimenta as duas barreiras (cerca de 60 mA cada) |
 | Protoboard e jumpers | 1 | Montagem |
 
-Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é um contato seco de relé: o comum vai ao GND e o NF ao GPIO com pull-up. Assim os 12 V nunca chegam ao ESP32, e o GND da fonte de 12 V não precisa ser ligado ao do ESP32.
+Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é um contato seco de relé: o comum (C ou CM) vai ao GND, e ao GPIO com pull-up vai o contato que fica **fechado com o feixe livre** (NF ou NA, conforme o modelo). A ordem dos bornes muda entre os modelos: a placa verde tem `NF NA C` e a laranja (A2924), `NA NF CM`. Se, com a porta vazia, o monitor serial mostrar `[BARREIRA] A cortada` logo depois de ligar, troque o fio para o outro contato. Assim os 12 V nunca chegam ao ESP32, e o GND da fonte de 12 V não precisa ser ligado ao do ESP32.
 
 ## Pinos do ESP32
 
@@ -37,21 +37,55 @@ Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é
   - corta A, depois B, e libera = **entrada** (ocupação +1);
   - corta B, depois A, e libera = **saída** (ocupação −1).
 - As barreiras devem ficar a **15 cm ou mais** uma da outra. Mais perto que isso, uma pessoa corta as duas ao mesmo tempo e o sentido fica ambíguo.
-- No modo automático, o resfriamento só atua com a sala ocupada e a temperatura mais de 0,5 °C acima do alvo. O alvo cai 0,3 °C por pessoa, partindo de 24 °C, entre 18 e 30 °C.
-- O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 30 min.
+- No modo automático, o aparelho só fica ligado com a sala ocupada. O alvo parte de 24 °C (23 °C com mais de 30 °C lá fora, 25,5 °C com menos de 22 °C), desconta o aquecimento que as pessoas causam em 10 minutos, calculado pela temperatura do corpo (36,5 °C), e fica entre 18 e 25 °C, a faixa da NR-17 (`docs/fisica.md`, seção 8).
+- O LED IR liga o aparelho quando alguém entra (ou no modo manual) e o desliga quando a sala esvazia no modo automático ou com `AC_OFF`. O alvo vai no mesmo comando (seção "Comando IR ao ar-condicionado").
+- O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 2 h. Ele vem do site (professor ou administrador) ou do monitor serial.
+  - Os comandos são digitados no monitor serial: `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-`, a temperatura alvo, `IR <protocolo>` ou `IR_TESTE`.
+  - O ThingSpeak/TalkBack do projeto original foi removido.
 
 Equações lógicas, tabela de estados, contador e circuito do Logisim estão em `docs/eletronica-digital.md`. Cálculos elétricos (Ohm, potência, consumo, RC, energia por envio) e a seção "Montagem real" estão em `docs/fisica.md`.
 
 ## Firmware
 
-- Fica em `firmware/climacontrol/sketch.ino` (Arduino C++). A única biblioteca externa é a do DHT.
-- As configurações privadas ficam em `config.h`, fora do Git e copiado de `config.h.example`: URL da API, token do dispositivo, certificado CA e tipo do DHT.
+- Fica em `firmware/climacontrol/sketch.ino` (Arduino C++). As bibliotecas externas são a do DHT e a IRremoteESP8266.
+- As configurações privadas ficam em `config.h`, fora do Git e copiado de `config.h.example`: URL da API, token do dispositivo, certificado CA, rede Wi-Fi, tipo do DHT e protocolo IR.
 - Sem `MOVEMENT_DHT_TYPE DHT11` no `config.h`, o firmware usa DHT22, que é o modelo do Wokwi.
 - Lê os sensores a cada 2 s e envia ao `POST /api/telemetry` com o token Bearer. O intervalo de envio vem do plano otimizado, consultado a cada 15 min.
 - Usa NTP para o horário e um UUID por mensagem. O reenvio mantém o mesmo conteúdo até a confirmação. A fila guarda uma mensagem na RAM.
-- O LED IR só simula pulsos; não implementa o protocolo real dos fabricantes de ar-condicionado.
+- As barreiras são lidas a cada 10 ms numa tarefa própria, no núcleo 0. Um envio HTTP ou a reconexão do Wi-Fi não fazem perder passagens.
+- A temperatura interna enviada à API é a medida pelo DHT. A externa vem do site (Open-Meteo, pela cidade da unidade); sem cidade, do DHT externo, se houver.
+- A cada 15 s com a sala ocupada (1 min com ela vazia), o ESP32 busca em `GET /api/devices/me/control` o comando do professor e a temperatura externa. Cada comando tem uma versão e é aplicado uma vez; o monitor serial mostra `[SITE] Comando N do professor`.
+- Sem protocolo IR configurado, o LED manda pulsos simulados: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga, com 200 ms de pausa. Com protocolo, manda o código do fabricante.
 
-O CI não compila o firmware. Ele extrai a lógica da porta do `sketch.ino` e a testa em C++ com 13 cenários (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
+O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 22 passos do IR (pulsos simulados e protocolo real) e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
+
+## Comando IR ao ar-condicionado
+
+O firmware usa a biblioteca **IRremoteESP8266** (v2.9.0 ou mais nova, pelo Library Manager do Arduino IDE) para mandar pelo LED o código do fabricante, modulado em 38 kHz. Cada quadro leva o estado inteiro: ligado, em modo frio, no alvo, com ventilação automática, ou desligado. Mudanças seguidas (várias pessoas entrando) viram um quadro só, com pelo menos 1 s entre quadros. Ao ligar, o ESP32 manda o estado atual para sincronizar o aparelho.
+
+Para escolher o protocolo:
+
+1. No `config.h`: `#define MOVEMENT_AC_PROTOCOLO "GREE"`.
+2. Ou no monitor serial: `IR GREE`. O nome fica gravado na flash e vale mais que o `config.h`. `IR SIMULADO` volta aos pulsos simulados.
+3. Sem saber o protocolo, aponte o LED para o aparelho e digite `IR_TESTE`. O ESP32 liga (22 °C, frio) e desliga o aparelho em cada protocolo da lista, um a cada 6,5 s, e mostra o nome antes de cada um. Grave com `IR <nome>` o que fez o aparelho responder. Qualquer tecla interrompe o teste.
+
+| Marca | Protocolo para começar |
+| --- | --- |
+| LG | `LG2` (controles AKB, linha Dual Inverter) ou `LG` |
+| Samsung | `SAMSUNG_AC` |
+| Springer Midea, Midea, Carrier | `MIDEA` ou `COOLIX` |
+| Gree | `GREE` ou `KELVINATOR` |
+| TCL | `TCL112AC` |
+| Daikin | `DAIKIN` |
+| Fujitsu | `FUJITSU_AC` |
+| Hitachi | `HITACHI_AC` |
+| Consul (Whirlpool) | `WHIRLPOOL_AC`; se não responder, `IR_TESTE` |
+| Electrolux, Elgin, Philco, Agratto | Fabricados por terceiros, variam por modelo: `IR_TESTE` |
+
+- A tabela é um ponto de partida. O protocolo só se confirma no aparelho, porque a mesma marca usa fabricantes diferentes conforme o modelo.
+- O LED precisa estar de frente para o receptor do aparelho, a poucos metros.
+- A biblioteca ocupa bastante flash. Se o Arduino IDE acusar "Sketch too big", escolha em Ferramentas → Partition Scheme a opção **Huge APP (3MB No OTA/1MB SPIFFS)**.
+- O site continua sem mandar comandos ao aparelho: quem decide é o ESP32.
 
 ## Simulação no Wokwi
 

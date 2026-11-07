@@ -5,6 +5,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 
+from app.main import SCHEMA_VERSION
+
 
 def test_migrations_accept_an_existing_connection_without_committing_outer_transaction(
     database_url,
@@ -25,7 +27,7 @@ def test_migrations_accept_an_existing_connection_without_committing_outer_trans
         )
         command.upgrade(config, "head")
         assert transaction.is_active
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0005_alerts"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == SCHEMA_VERSION
         assert (
             connection.scalar(
                 text("SELECT session_version FROM users WHERE id = :id"), {"id": user_id}

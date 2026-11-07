@@ -123,7 +123,7 @@ O site tem uma única variável opcional, `VITE_API_BASE_URL`, que vale `/api` p
 - **CI** ([ci.yml](.github/workflows/ci.yml)) roda em todas as branches:
   - **backend:** ruff e pytest contra um PostgreSQL 18 de verdade;
   - **frontend:** lint, testes e build;
-  - **firmware:** equações lógicas e lógica da porta extraída do `sketch.ino`;
+  - **firmware:** equações lógicas, lógica da porta e comandos IR extraídos do `sketch.ino`;
   - **image:** build da imagem Docker.
 - **CD:** só um push na `main` publica `movement:latest` e `movement:<sha>` no Azure Container Registry. O deploy contínuo do App Service puxa a nova `latest` e reinicia o contêiner, que migra o banco ao subir.
 - **Fluxo:** cada issue tem uma branch `feat/<número>-<descrição>`, que entra na `Devlop` por PR com merge commit. Depois de testar na `Devlop`, um humano abre o PR `Devlop → main`. Ninguém dá push direto nessas duas branches.
@@ -155,7 +155,10 @@ O comando:
 - aceita como destino apenas `.env` ou `.env.<nome>` em `backend/`, com permissões privadas também para o backup;
 - ao reconfigurar um arquivo, mantém o login que já está gravado nele.
 
-**TLS:** para conexões remotas, o padrão é `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`. A CA do Supabase não vem no repositório de certificados do sistema, então informe em `sslrootcert` o caminho do certificado da CA do Supabase (veja [contexto/estado-atual.md](contexto/estado-atual.md#problemas-conhecidos)).
+**TLS:** conexões remotas usam `sslmode=verify-full`, que verifica o certificado e o nome do servidor. A URL aceita apenas as opções `sslmode` e `sslrootcert`.
+- **Supabase:** a CA dele é privada ("Supabase Root 2021 CA", válida até 2031) e não vem no repositório de certificados do sistema. Por isso o configurador usa a cópia oficial embutida em `backend/app/certs/supabase-root-2021.crt`.
+- **Outros servidores:** o configurador usa os certificados do sistema.
+- **Caminho relativo:** um `sslrootcert` relativo é procurado a partir da pasta `backend`. Isso funciona também em pastas com acento, que o libpq do Windows não abre por caminho absoluto.
 
 Para executar a API local com o banco do Supabase, na pasta `backend`:
 
@@ -190,6 +193,8 @@ gh secret set ACR_PASSWORD --repo expotech2026-2/Projeto-Movement-2.0
 ..\.venv\Scripts\python.exe scripts\azure_settings.py https://NOME-DO-APP.azurewebsites.net
 ```
 
+   Um `.env.supabase` gerado antes da CA embutida tem `sslmode=require`: a conexão é criptografada, mas não confere o servidor. Para verificar o certificado, troque na `MOVEMENT_DATABASE_URL` o trecho `sslmode=require` por `sslmode=verify-full&sslrootcert=app%2Fcerts%2Fsupabase-root-2021.crt`.
+
 7. Copie o conteúdo de `backend/.env.azure.json`, que fica fora do Git, para Web App > Settings > Environment variables > Advanced edit:
    - acrescente as entradas às que já existem, sem apagar as `DOCKER_REGISTRY_*`, e aplique;
    - o arquivo inclui `WEBSITES_PORT=8000` e limita o CORS ao endereço publicado.
@@ -223,7 +228,17 @@ Depois do sucesso, ele configura o `backend/.env` e guarda a configuração ante
 
 No pgAdmin, as tabelas ficam em `Servers > Movement > Databases > Movement > Schemas > movement > Tables`; atualize a árvore depois da migração.
 - `database/pgadmin-servers.json` importa os cadastros pelo menu Tools > Import/Export Servers e não contém senhas.
-- `database/consultas.sql` traz consultas de inventário, leituras e médias.
+- `database/consultas.sql` traz consultas para o Query Tool, que funcionam no schema `movement` e no `public` do banco local:
+  - unidades;
+  - inventário por unidade;
+  - dispositivos;
+  - médias mensais;
+  - leituras;
+  - alertas;
+  - usuários;
+  - catálogo por marca.
+
+  Senhas e tokens não aparecem: ficam só como hash.
 
 | Tabela | Conteúdo |
 | --- | --- |
@@ -248,6 +263,7 @@ Fora as rotas de saúde e o próprio login, a API exige sessão: sem ela, respon
 | --- | --- | --- |
 | Consultar unidades, salas, aparelhos, leituras e histórico | Sim | Sim |
 | Gerar relatórios em PDF | Sim | Sim |
+| Fixar a temperatura ou desligar o ar-condicionado da sala (vale 2 h) | Sim | Sim |
 | Cadastrar, editar e excluir unidades, salas e aparelhos | Sim | Não |
 | Cadastrar sensores ESP32 | Sim | Não |
 | Gerenciar usuários | Sim | Não |
@@ -310,7 +326,13 @@ O fluxo completo é `ESP32 → POST /api/telemetry → PostgreSQL → FastAPI �
 
 **Histórico:** médias mensais por sala e exportação CSV.
 
-O site **não envia comandos físicos** de ligar ou desligar: quem decide o resfriamento é o firmware.
+### Controle do ar-condicionado
+
+No painel da sala, professores e administradores podem fixar uma temperatura (16 a 30 °C), desligar o aparelho ou voltar ao automático (`PUT /api/rooms/{id}/control`). O comando vale por 2 horas e depois volta sozinho ao automático. O ESP32 busca o comando em `GET /api/devices/me/control` a cada 15 s com a sala ocupada (1 min com ela vazia) e manda o código IR ao aparelho.
+
+No automático, o alvo parte de 24 °C, ajusta pela temperatura externa e desconta o aquecimento que as pessoas causam em 10 minutos, calculado pela diferença entre o corpo humano (36,5 °C) e o ar. O resultado fica entre 18 e 25 °C, a faixa da NR-17 (item 17.8.4.2) para ambientes climatizados. Os cálculos estão em [docs/fisica.md](docs/fisica.md#8-modelo-térmico-da-sala-e-alvo-do-ar-condicionado).
+
+**Temperatura externa:** vem da [Open-Meteo](https://open-meteo.com/) (dados CC BY 4.0) para a cidade cadastrada na unidade, sem chave nem custo. O backend guarda as coordenadas ao salvar a unidade e consulta o clima no máximo a cada 15 min por cidade. O plano grátis da Climatempo atende uma cidade só, e as salas ficam em cidades diferentes do estado de São Paulo.
 
 ### Alertas
 
@@ -387,7 +409,7 @@ Detalhes da contagem:
 - filtra a oscilação do contato do relé por 30 ms;
 - as barreiras precisam ficar a **15 cm ou mais** uma da outra.
 
-No modo automático, o resfriamento só atua com a sala ocupada. Equações, contador e circuitos do Logisim estão em [docs/eletronica-digital.md](docs/eletronica-digital.md).
+No modo automático, o resfriamento só atua com a sala ocupada, e o LED IR desliga o aparelho quando a sala esvazia. Equações, contador e circuitos do Logisim estão em [docs/eletronica-digital.md](docs/eletronica-digital.md).
 
 ### Firmware
 
@@ -395,12 +417,16 @@ No modo automático, o resfriamento só atua com a sala ocupada. Equações, con
 - Copie `firmware/climacontrol/config.h.example` para `config.h` e configure:
   - URL da API: em produção, `https://NOME-DO-APP.azurewebsites.net/api/telemetry`;
   - token do dispositivo;
-  - certificado raiz do domínio (`MOVEMENT_CA_CERT`).
+  - certificado raiz do domínio (`MOVEMENT_CA_CERT`);
+  - rede Wi-Fi (`MOVEMENT_WIFI_SSID` e `MOVEMENT_WIFI_PASSWORD`);
+  - protocolo IR do ar-condicionado (`MOVEMENT_AC_PROTOCOLO`), opcional.
   O arquivo é privado e o Git o ignora.
 - Para o DHT11 da montagem, inclua `#define MOVEMENT_DHT_TYPE DHT11` no `config.h`. Sem essa linha vale o DHT22, que é o modelo do Wokwi.
 - O relógio é sincronizado por NTP e cada mensagem usa um UUID. Os reenvios mantêm o mesmo conteúdo até a confirmação.
 - A fila guarda uma mensagem em RAM e não substitui uma fila persistente em flash.
-- O envio para o ThingSpeak/TalkBack do projeto original fica desativado por padrão, e nenhuma chave original foi mantida.
+- **Bibliotecas:** instale pelo Library Manager a DHT sensor library e a IRremoteESP8266 (v2.9.0 ou mais nova).
+- **Modo manual:** digite no monitor serial `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo (de 16 a 30). Ele volta ao automático depois de 2 h, como o comando do site. O ThingSpeak/TalkBack do projeto original foi removido.
+- **Comando IR:** com o protocolo do aparelho (por exemplo `IR GREE` no monitor serial), o LED manda o código do fabricante. `IR_TESTE` experimenta os protocolos das marcas comuns no Brasil; a tabela está em [contexto/hardware.md](contexto/hardware.md#comando-ir-ao-ar-condicionado). Sem protocolo, o LED pisca pulsos simulados (100 ms baixa 1 °C, 300 ms sobe, 800 ms liga, 1,5 s desliga).
 
 Na rede local, o ESP32 físico precisa alcançar a API: rode o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. Para testar sem hardware, publique uma leitura simulada. O token é solicitado sem eco, e o comando é só para desenvolvimento:
 
@@ -445,6 +471,7 @@ backend/
         main.py                          # create_app: rotas de saúde, login e telemetria; inclui os routers
         site.py                          # create_site: API em /api e build do React em / (usado no contêiner)
         settings.py  database.py         # configuração; conexão com search_path por sessão
+        certs/                           # CA raiz do Supabase, usada no verify-full
         models.py  schemas.py            # tabelas (SQLAlchemy 2.0) e contratos da API (Pydantic)
         auth.py  security.py  users.py   # perfis, hash scrypt, sessões assinadas e cadastro de usuários
         dependencies.py  repository.py   # injeção de dependências e repositório da telemetria
@@ -472,10 +499,10 @@ firmware/climacontrol/
     config.h.example                     # modelo do config.h privado (URL, token, CA, tipo do DHT)
     diagram.json  wokwi-project.txt      # circuito no Wokwi
 
-hardware/logica/                         # verificação das equações e teste C++ da lógica da porta (CI)
+hardware/logica/                         # verificação das equações e teste C++ da porta e dos comandos IR (CI)
 docs/                                    # física, eletrônica digital, arquitetura e pesquisa operacional
 database/                                # consultas SQL e importação de servidores no pgAdmin
-scripts/                                 # iniciar.ps1, parar.ps1 e smoke.py (teste rápido da API local)
+scripts/                                 # iniciar.ps1 e parar.ps1: sobem e encerram o site e a API no Windows
 .github/workflows/ci.yml                 # CI em todas as branches; publicação da imagem só na main
 ```
 
@@ -509,7 +536,7 @@ A lista completa, incluindo `ruff format --check`, está no [AGENTS.md](AGENTS.m
 
 ## Limitações
 
-- O site não envia comandos físicos aos aparelhos.
-- O LED IR simula pulsos e não implementa o protocolo real dos fabricantes.
-- O CI não compila o firmware, só testa a lógica da porta; o firmware ainda não foi gravado num ESP32 real.
+- O comando do site chega ao aparelho em até 15 s (1 min com a sala vazia), porque o ESP32 consulta a API em vez de receber o comando na hora.
+- O protocolo IR de cada aparelho precisa ser confirmado no próprio aparelho (`IR_TESTE`), e o ESP32 não sabe se o comando chegou: não há retorno do aparelho.
+- O CI não compila o firmware, só testa a lógica da porta e dos comandos IR; o firmware ainda não foi gravado num ESP32 real.
 - Medição de energia por aparelho e permissões por sala exigem implementações adicionais.

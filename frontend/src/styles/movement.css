@@ -459,7 +459,7 @@ h1 {
 }
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 17px;
   margin-bottom: 24px;
 }
@@ -1373,4 +1373,30 @@ td small {
   .skip-link {
     left: 10px;
   }
+}
+.room-control .control-status {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.control-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.control-manual label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.control-manual input {
+  width: 76px;
 }

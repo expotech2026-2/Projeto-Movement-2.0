@@ -18,7 +18,7 @@ feat/<n>-… ─PR─▶ Devlop ─PR─▶ main ─CI─▶ imagem no registro 
 1. Em toda branch, o CI (`.github/workflows/ci.yml`) roda quatro jobs:
    - **backend:** ruff e pytest;
    - **frontend:** lint, testes e build;
-   - **firmware:** lógica da porta e equações;
+   - **firmware:** lógica da porta, comandos IR e equações;
    - **image:** build da imagem Docker.
 2. Só um push na `main` publica a imagem `movement`, com as tags `latest` e o SHA do commit, no Azure Container Registry.
 3. O deploy contínuo do Web App puxa a nova `latest` e reinicia o contêiner.
@@ -40,7 +40,9 @@ feat/<n>-… ─PR─▶ Devlop ─PR─▶ main ─CI─▶ imagem no registro 
 
 - Projeto "Movement", PostgreSQL 17, região us-west-2 (próxima do Azure West US 3).
 - As tabelas ficam no schema **`movement`**. O schema `public` fica vazio de propósito: o Supabase o expõe pela API REST com a chave anônima, e os papéis `anon` e `authenticated` não têm acesso ao `movement`.
-- A conexão usa o **Session pooler** (porta 5432, aceita IPv4) com TLS.
+- A conexão usa o **Session pooler** (porta 5432, aceita IPv4) com TLS verificado (`verify-full`).
+  - A CA do Supabase é privada, por isso a cópia oficial fica em `backend/app/certs/supabase-root-2021.crt`.
+  - Na URL, o `sslrootcert` é relativo à pasta `backend` (`backend/app/database.py`).
   - A conexão direta só tem IPv6.
   - O Transaction pooler (porta 6543) não preserva configurações de sessão.
   - Por isso nenhum dos dois é usado.

@@ -11,9 +11,11 @@ import { ManagementForm } from "./components/ManagementForms";
 import { OperatorLogin } from "./components/OperatorLogin";
 import { ReportsView } from "./components/ReportsView";
 import { RoomAlerts } from "./components/RoomAlerts";
+import { RoomControl } from "./components/RoomControl";
 import { UnitsView } from "./components/UnitsView";
 import { UsersView } from "./components/UsersView";
 import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
+import { useRoomControl } from "./hooks/useRoomControl";
 import { useRoomFeed } from "./hooks/useRoomFeed";
 import { useTheme } from "./hooks/useTheme";
 import { clearSession, getSessionToken, request } from "./services/movementApi";
@@ -189,7 +191,11 @@ function Workspace({ user, onLogout }) {
     if (type === "unit") {
       await request(`/units${item ? `/${item.id}` : ""}`, {
         method,
-        body: JSON.stringify({ name: values.name, address: values.address }),
+        body: JSON.stringify({
+          name: values.name,
+          address: values.address,
+          city: values.city,
+        }),
       });
       await refreshDirectory();
     } else if (type === "room") {
@@ -594,6 +600,8 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         })),
     [feed.history, feed.updatedAt, period],
   );
+  const control = useRoomControl(room?.id, feed.updatedAt);
+  const outside = control.control?.outside;
   const cards = [
     {
       icon: "temp",
@@ -601,8 +609,20 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       value: number(reading?.temp_inside),
       unit: "°C",
       detail: reading
-        ? `Externa: ${number(reading.temp_outside)} °C`
+        ? `Alvo do ar: ${number(reading.target_temp)} °C`
         : "Aguardando sensor",
+      color: "amber",
+    },
+    {
+      icon: "sun",
+      label: "Temperatura externa",
+      value: number(outside?.temperature),
+      unit: "°C",
+      detail: outside
+        ? `${outside.city} · Open-Meteo`
+        : control.loading
+          ? "Consultando o clima…"
+          : "Cadastre a cidade da unidade",
       color: "amber",
     },
     {
@@ -610,9 +630,11 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       label: "Umidade relativa",
       value: number(reading?.humidity_inside),
       unit: "%",
-      detail: reading
-        ? `Externa: ${number(reading.humidity_outside)}%`
-        : "Aguardando sensor",
+      detail: outside
+        ? `Externa: ${number(outside.humidity, 0)}%`
+        : reading
+          ? `Externa: ${number(reading.humidity_outside)}%`
+          : "Aguardando sensor",
       color: "blue",
     },
     {
@@ -672,6 +694,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           </article>
         ))}
       </div>
+      {room?.id && <RoomControl state={control} />}
       <section className="panel chart-panel">
         <div className="section-heading">
           <div>
