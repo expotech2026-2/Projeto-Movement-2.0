@@ -123,7 +123,7 @@ O site tem uma única variável opcional, `VITE_API_BASE_URL`, que vale `/api` p
 - **CI** ([ci.yml](.github/workflows/ci.yml)) roda em todas as branches:
   - **backend:** ruff e pytest contra um PostgreSQL 18 de verdade;
   - **frontend:** lint, testes e build;
-  - **firmware:** equações lógicas e lógica da porta extraída do `sketch.ino`;
+  - **firmware:** equações lógicas, lógica da porta e comandos IR extraídos do `sketch.ino`;
   - **image:** build da imagem Docker.
 - **CD:** só um push na `main` publica `movement:latest` e `movement:<sha>` no Azure Container Registry. O deploy contínuo do App Service puxa a nova `latest` e reinicia o contêiner, que migra o banco ao subir.
 - **Fluxo:** cada issue tem uma branch `feat/<número>-<descrição>`, que entra na `Devlop` por PR com merge commit. Depois de testar na `Devlop`, um humano abre o PR `Devlop → main`. Ninguém dá push direto nessas duas branches.
@@ -402,7 +402,7 @@ Detalhes da contagem:
 - filtra a oscilação do contato do relé por 30 ms;
 - as barreiras precisam ficar a **15 cm ou mais** uma da outra.
 
-No modo automático, o resfriamento só atua com a sala ocupada. Equações, contador e circuitos do Logisim estão em [docs/eletronica-digital.md](docs/eletronica-digital.md).
+No modo automático, o resfriamento só atua com a sala ocupada, e o LED IR desliga o aparelho quando a sala esvazia. Equações, contador e circuitos do Logisim estão em [docs/eletronica-digital.md](docs/eletronica-digital.md).
 
 ### Firmware
 
@@ -416,6 +416,7 @@ No modo automático, o resfriamento só atua com a sala ocupada. Equações, con
 - O relógio é sincronizado por NTP e cada mensagem usa um UUID. Os reenvios mantêm o mesmo conteúdo até a confirmação.
 - A fila guarda uma mensagem em RAM e não substitui uma fila persistente em flash.
 - **Modo manual:** digite no monitor serial `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo (de 18 a 30). Ele volta ao automático depois de 30 min. O ThingSpeak/TalkBack do projeto original foi removido.
+- **Comandos IR:** um pulso por comando no LED, e a duração diz qual é: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga. O monitor serial mostra cada um, por exemplo `[IR] BAIXAR (100 ms) -> aparelho ligado em 23 C`.
 
 Na rede local, o ESP32 físico precisa alcançar a API: rode o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. Para testar sem hardware, publique uma leitura simulada. O token é solicitado sem eco, e o comando é só para desenvolvimento:
 
@@ -488,7 +489,7 @@ firmware/climacontrol/
     config.h.example                     # modelo do config.h privado (URL, token, CA, tipo do DHT)
     diagram.json  wokwi-project.txt      # circuito no Wokwi
 
-hardware/logica/                         # verificação das equações e teste C++ da lógica da porta (CI)
+hardware/logica/                         # verificação das equações e teste C++ da porta e dos comandos IR (CI)
 docs/                                    # física, eletrônica digital, arquitetura e pesquisa operacional
 database/                                # consultas SQL e importação de servidores no pgAdmin
 scripts/                                 # iniciar.ps1 e parar.ps1: sobem e encerram o site e a API no Windows
@@ -526,6 +527,6 @@ A lista completa, incluindo `ruff format --check`, está no [AGENTS.md](AGENTS.m
 ## Limitações
 
 - O site não envia comandos físicos aos aparelhos.
-- O LED IR simula pulsos e não implementa o protocolo real dos fabricantes.
-- O CI não compila o firmware, só testa a lógica da porta; o firmware ainda não foi gravado num ESP32 real.
+- O LED IR manda pulsos simples (a duração diz o comando) e não implementa o protocolo real dos fabricantes.
+- O CI não compila o firmware, só testa a lógica da porta e dos comandos IR; o firmware ainda não foi gravado num ESP32 real.
 - Medição de energia por aparelho e permissões por sala exigem implementações adicionais.

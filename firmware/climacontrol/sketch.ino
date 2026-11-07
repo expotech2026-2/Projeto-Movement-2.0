@@ -95,13 +95,20 @@ const unsigned long intervaloResfr    = 1000;
 unsigned long intervaloEnvio          = 16000; // ajustado pelo plano otimizado da API (15 a 300 s)
 const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cada 15 min
 
-// ── Pulso IR (LED) ─────────────────────────────────────────────────────────
-bool          pulsoAtivo      = false;
-unsigned long inicioPulso     = 0;
-int           pulsosPendentes = 0;
-unsigned long proximoPulso    = 0;
-const unsigned long DURACAO_PULSO = 100;
-const unsigned long PAUSA_PULSO   = 200;
+// ── Pulsos IR (LED) ────────────────────────────────────────────────────────
+// Um pulso por comando, e a duração diz qual é; o alvo muda 1 °C por pulso.
+const unsigned long PULSO_BAIXAR   = 100;
+const unsigned long PULSO_SUBIR    = 300;
+const unsigned long PULSO_LIGAR    = 800;
+const unsigned long PULSO_DESLIGAR = 1500;
+const unsigned long PAUSA_PULSO    = 200;
+bool          pulsoAtivo   = false;
+unsigned long inicioPulso  = 0;
+unsigned long duracaoPulso = 0;
+unsigned long proximoPulso = 0;
+// O que o aparelho já recebeu pelo LED; ele começa desligado em 24 °C.
+bool ligadoEnviado = false;
+int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;
 
 // ════════════════════════════════════════════════════════════════════════════
 void setup() {
@@ -152,29 +159,45 @@ bool podeResfriar() {
   return modoAtual == MODO_MANUAL || totalPessoas > 0;
 }
 
-// ── Define um novo alvo e dispara pulsos IR proporcionais ──────────────────
+// O aparelho fica ligado com not(C) · (M + B): no automático, desliga quando a sala esvazia.
+bool acDeveFicarLigado() {
+  return !acForcadoOff && podeResfriar();
+}
+
+// Próximo pulso para o aparelho chegar ao estado desejado (0 = nenhum); ligar/desligar vem antes.
+unsigned long proximoComandoIR(const char*& nome) {
+  bool ligar = acDeveFicarLigado();
+  if (ligar != ligadoEnviado) {
+    ligadoEnviado = ligar;
+    nome = ligar ? "LIGAR" : "DESLIGAR";
+    return ligar ? PULSO_LIGAR : PULSO_DESLIGAR;
+  }
+  int alvo = (int)tempAlvoAC;
+  if (!ligadoEnviado || alvo == alvoEnviado) return 0;
+  bool subir = alvo > alvoEnviado;
+  alvoEnviado += subir ? 1 : -1;
+  nome = subir ? "SUBIR" : "BAIXAR";
+  return subir ? PULSO_SUBIR : PULSO_BAIXAR;
+}
+
+// ── Define um novo alvo; processarPulsosIR leva o aparelho até ele ─────────
 void definirAlvoAC(float novoAlvo, const char* origem) {
   novoAlvo = constrain(novoAlvo, TEMP_AC_MIN, TEMP_AC_MAX);
   int alvoInt = (int)round(novoAlvo);
 
   if (alvoInt == ultimoComandoAC) return; // nada mudou
 
-  int diff = (ultimoComandoAC == -1) ? 1 : abs(alvoInt - ultimoComandoAC);
   ultimoComandoAC = alvoInt;
   tempAlvoAC      = alvoInt;
 
   float desvio = tempInternaAjustada - tempAlvoAC;
-  acLigado = !acForcadoOff && podeResfriar() && (desvio > TOLERANCIA_AC);
+  acLigado = acDeveFicarLigado() && (desvio > TOLERANCIA_AC);
 
   Serial.println(F("\n┌─── COMANDO AO AR-CONDICIONADO ───"));
   Serial.print(F("│ Origem:     ")); Serial.println(origem);
   Serial.print(F("│ Alvo:       ")); Serial.print(alvoInt); Serial.println(F(" °C"));
   Serial.print(F("│ Status:     ")); Serial.println(acLigado ? F("RESFRIANDO") : F("em espera"));
-  Serial.print(F("│ Pulsos IR:  ")); Serial.println(diff);
   Serial.println(F("└──────────────────────────────────"));
-
-  pulsosPendentes = diff;     // enfileira pulsos
-  proximoPulso    = millis();
 }
 
 // ── Atualiza alvo no modo automático ───────────────────────────────────────
@@ -327,6 +350,7 @@ void lerClima() {
   Serial.printf("| Umid in/ext: %.0f%% / %.0f%%\n", umidInternaAtual, umidExternaAtual);
   Serial.printf("| Recomendada: %.1f C\n", tempRecomendada);
   Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "ALTERANDO" : "espera");
+  Serial.printf("| Aparelho:    %s em %d C (pelo IR)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado);
   Serial.printf("| Pessoas:     %d  (%.0f W)\n", totalPessoas, totalPessoas * WATTS_POR_PESSOA);
   Serial.println(F("+-------------------------------+"));
 }
@@ -419,19 +443,22 @@ void atualizarIntervalo() {
 void processarPulsosIR() {
   unsigned long agora = millis();
   if (pulsoAtivo) {
-    if (agora - inicioPulso >= DURACAO_PULSO) {
+    if (agora - inicioPulso >= duracaoPulso) {
       digitalWrite(pinLED_IR, LOW);
       pulsoAtivo = false;
       proximoPulso = agora + PAUSA_PULSO;
     }
     return;
   }
-  if (pulsosPendentes > 0 && agora >= proximoPulso) {
-    digitalWrite(pinLED_IR, HIGH);
-    pulsoAtivo = true;
-    inicioPulso = agora;
-    pulsosPendentes--;
-  }
+  if (agora < proximoPulso) return;
+  const char* nome = "";
+  duracaoPulso = proximoComandoIR(nome);
+  if (duracaoPulso == 0) return;
+  digitalWrite(pinLED_IR, HIGH);
+  pulsoAtivo = true;
+  inicioPulso = agora;
+  Serial.printf("[IR] %s (%lu ms) -> aparelho %s em %d C\n", nome, duracaoPulso,
+                ligadoEnviado ? "ligado" : "desligado", alvoEnviado);
 }
 
 // ── Evento de entrada/saída ────────────────────────────────────────────────

@@ -1,12 +1,13 @@
 # Estado atual
 
-Atualizado em **06/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **07/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
 
 ## Pronto
 
 - As etapas 1 a 7 estão implementadas e mescladas na `Devlop` e na `main`.
 - A conexão com o Supabase verifica o certificado (`verify-full`) com a CA oficial embutida em `backend/app/certs/`.
-- Verificações passando: testes de backend e de frontend, build, lint, lógica da porta e build da imagem. O CI da `main` está verde.
+- Verificações passando: testes de backend e de frontend, build, lint, lógica da porta, comandos IR e build da imagem. O CI da `main` está verde.
+- O LED IR manda comandos com sentido (subir ou baixar 1 °C por pulso) e desliga o aparelho quando a sala esvazia no modo automático.
 - A imagem de produção (`movement:latest`) está publicada no registro do Azure.
 - O Supabase está configurado: schema `movement` protegido da API pública, catálogo do Inmetro carregado e nenhum alerta de segurança.
 
@@ -27,6 +28,7 @@ Atualizado em **06/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 
 - **#5:** medir no Wokwi a duração real do envio, que alimenta a energia por envio da Pesquisa Operacional.
 - **#7:** montar os circuitos no Logisim Evolution e anexar os prints (`docs/eletronica-digital.md`, seção 11).
+- Conferir no Wokwi os comandos IR: `[IR] LIGAR` na primeira entrada, `[IR] BAIXAR` quando o alvo cai e `[IR] DESLIGAR` quando a última pessoa sai.
 - Montar o circuito físico e testar as barreiras reais. O firmware nunca foi gravado num ESP32 de verdade.
 - Confirmar com os professores que o Supabase vale como banco gerenciado e o Wokwi como simulação do circuito.
 

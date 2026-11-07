@@ -38,6 +38,7 @@ Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é
   - corta B, depois A, e libera = **saída** (ocupação −1).
 - As barreiras devem ficar a **15 cm ou mais** uma da outra. Mais perto que isso, uma pessoa corta as duas ao mesmo tempo e o sentido fica ambíguo.
 - No modo automático, o resfriamento só atua com a sala ocupada e a temperatura mais de 0,5 °C acima do alvo. O alvo cai 0,3 °C por pessoa, partindo de 24 °C, entre 18 e 30 °C.
+- O LED IR liga o aparelho quando alguém entra (ou no modo manual) e o desliga quando a sala esvazia no modo automático ou com `AC_OFF`. Cada grau de mudança no alvo vira um pulso de subir ou de baixar.
 - O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 30 min.
   - Os comandos são digitados no monitor serial: `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo.
   - O ThingSpeak/TalkBack do projeto original foi removido.
@@ -51,9 +52,9 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 - Sem `MOVEMENT_DHT_TYPE DHT11` no `config.h`, o firmware usa DHT22, que é o modelo do Wokwi.
 - Lê os sensores a cada 2 s e envia ao `POST /api/telemetry` com o token Bearer. O intervalo de envio vem do plano otimizado, consultado a cada 15 min.
 - Usa NTP para o horário e um UUID por mensagem. O reenvio mantém o mesmo conteúdo até a confirmação. A fila guarda uma mensagem na RAM.
-- O LED IR só simula pulsos; não implementa o protocolo real dos fabricantes de ar-condicionado.
+- O LED IR manda um pulso por comando, e a duração diz qual é: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga, com 200 ms de pausa entre eles. Não é o protocolo real dos fabricantes de ar-condicionado, que usa códigos modulados em 38 kHz.
 
-O CI não compila o firmware. Ele extrai a lógica da porta do `sketch.ino` e a testa em C++ com 13 cenários (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
+O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta e 12 passos do IR (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
 
 ## Simulação no Wokwi
 
