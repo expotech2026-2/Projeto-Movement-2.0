@@ -34,7 +34,7 @@ class OutsideOutput(BaseModel):
     city: str
     temperature: float
     humidity: float
-    source: str = "Open-Meteo"
+    source: str
 
 
 class ControlOutput(BaseModel):
@@ -73,7 +73,12 @@ def outside_for(session: Session, room: Room, climate: ClimateService) -> Outsid
     value = climate.outside(unit.latitude, unit.longitude)
     if value is None:
         return None
-    return OutsideOutput(city=unit.city, temperature=value.temperature, humidity=value.humidity)
+    return OutsideOutput(
+        city=unit.city,
+        temperature=value.temperature,
+        humidity=value.humidity,
+        source=value.source,
+    )
 
 
 def control_output(session: Session, room: Room, climate: ClimateService) -> ControlOutput:

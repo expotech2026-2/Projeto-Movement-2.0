@@ -2,6 +2,12 @@
 
 Justificativa técnica do comportamento físico do circuito do Movement (corrente, tensão, potência e sinal), com os cálculos aplicados. Atende ao requisito "Física para Sistemas Computacionais" da ExpoTech 2026.2 (issue #5).
 
+| Conceito do roteiro da ExpoTech | Onde aparece |
+| --- | --- |
+| Eletrostática | Seção 4: capacitância da linha de dados do DHT e constante de tempo RC |
+| Eletrodinâmica | Seções 2, 5 e 6 (lei de Ohm, potência, consumo e energia por envio) e 9.1 (transistor como chave) |
+| Magnetismo | Seção 9.7: bobina do relé das barreiras, força magnética e autoindução |
+
 ## 1. Circuito
 
 O circuito está em [`firmware/climacontrol/diagram.json`](../firmware/climacontrol/diagram.json) e é simulado no Wokwi.
@@ -282,6 +288,37 @@ O ESP32 lê alguns pinos (*strapping pins*) no momento em que liga:
 | DHT11 | 3,3 V | até 1,0 mA | ~3 mW |
 
 Na montagem real, o maior consumo contínuo é o das barreiras (1,44 W), e não o do ESP32. A otimização da Pesquisa Operacional reduz a parte que o software controla: as transmissões Wi-Fi do ESP32.
+
+### 9.7 Relé das barreiras (magnetismo)
+
+Cada receptor iPEC tem um relé de 12 V: YLE YA101-C-12V na placa verde e YA318H-C-12V na laranja. O relé é um **eletroímã**: a corrente na bobina magnetiza o núcleo de ferro, a força magnética atrai a armadura, e ela leva o contato comum (C ou CM) do NF para o NA. Sem corrente, uma mola devolve o contato.
+
+**Campo e força.** Numa bobina de $N$ espiras e comprimento $l$, com núcleo de permeabilidade $\mu$:
+
+$$B \approx \frac{\mu \cdot N \cdot I}{l}$$
+
+O campo cresce com a corrente. O relé só fecha quando a força magnética vence a mola, o que acontece acima da tensão de operação da bobina, e só solta abaixo de uma tensão menor. Essa diferença (histerese) impede que o contato fique oscilando perto do limite.
+
+**Corrente e potência da bobina.** A bobina é um fio enrolado, com resistência $R_{bob}$:
+
+$$I_{bob} = \frac{V}{R_{bob}}, \qquad P_{bob} = V \cdot I_{bob} = \frac{V^2}{R_{bob}}$$
+
+| Origem | $R_{bob}$ | $I_{bob}$ a 12 V | $P_{bob}$ |
+| --- | --- | --- | --- |
+| Exemplo: bobina de 12 V e 0,36 W, valor comum em relés miniatura | 400 Ω | $12/400 = 30\ \text{mA}$ | $12^2/400 = 0{,}36\ \text{W}$ |
+| Relé YA101-C-12V da placa verde, medido com multímetro (receptor desligado) | ⏳ medir | ⏳ | ⏳ |
+
+O fabricante não publica a ficha do YA101-C-12V, então a resistência real precisa ser medida. A corrente da bobina é a maior parte dos ~60 mA que cada barreira consome (seção 9.2).
+
+**Autoindução.** A bobina também é um indutor de indutância $L$. Quando o transistor do receptor corta a corrente de repente, a bobina reage com uma tensão
+
+$$v = -L \frac{dI}{dt}$$
+
+que pode passar de centenas de volts por um instante. Por isso, uma bobina acionada por transistor costuma ter um diodo em paralelo (diodo de roda livre), que dá caminho à corrente e protege o transistor.
+
+**Isolamento.** A bobina (12 V) e os contatos ficam acoplados só pelo campo magnético, sem ligação elétrica entre eles. É por isso que os contatos podem ir direto ao GPIO do ESP32, sem optoacoplador (seção 9.2): os 12 V nunca chegam à placa.
+
+**Movimento mecânico.** A armadura tem massa e bate no contato ao fechar. O contato quica alguns milissegundos antes de assentar, e o firmware só aceita a leitura depois de 30 ms estável (seção 9.2).
 
 ## 10. Fontes
 

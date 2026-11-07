@@ -7,7 +7,8 @@ import {
   CATALOG_KINDS,
   ROLES,
 } from "../config/catalog";
-import { catalog } from "../services/movementApi";
+import { catalog, cities } from "../services/movementApi";
+import { CityInput } from "./CityInput";
 
 const TITLES = {
   unit: "unidade",
@@ -131,6 +132,18 @@ export function ManagementForm({ editing, units = [], onSave, onClose }) {
 }
 
 function UnitFields({ values, update }) {
+  const [options, setOptions] = useState([]);
+  useEffect(() => {
+    let active = true;
+    cities()
+      .then((list) => {
+        if (active) setOptions(list);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   return (
     <>
       <label>
@@ -154,16 +167,17 @@ function UnitFields({ values, update }) {
       </label>
       <label>
         Cidade
-        <input
-          maxLength={120}
-          placeholder="Ex.: Campinas"
+        <CityInput
           value={values.city}
-          onChange={(e) => update({ city: e.target.value })}
+          cities={options}
+          onChange={(city) => update({ city })}
         />
       </label>
       <p className="field-hint">
-        A temperatura externa das salas vem da Open-Meteo para esta cidade. Sem
-        cidade, o ESP32 usa o sensor externo, se houver.
+        As sugestões são os municípios do Brasil, da API do IBGE, com os de SP
+        primeiro. A temperatura externa das salas vem da Open-Meteo (ou da
+        OpenWeatherMap, se ela falhar) para esta cidade; sem cidade, o ESP32
+        usa o sensor externo, se houver.
       </p>
     </>
   );
