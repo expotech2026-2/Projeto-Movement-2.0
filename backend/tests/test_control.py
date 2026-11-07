@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.climate import ClimateUnavailable, Outside, Place
+from app.climate import ClimateUnavailable, Outside, Place, split_city
 from app.dependencies import climate_service
 from app.models import Room
 
@@ -11,8 +11,8 @@ class FakeClimate:
     def __init__(self):
         self.located = []
 
-    def locate(self, city):
-        self.located.append(city)
+    def locate(self, city, uf=None):
+        self.located.append((city, uf))
         if city == "Sem rede":
             raise ClimateUnavailable
         if city == "Cidade Inexistente":
@@ -123,29 +123,44 @@ def test_unit_city_gives_the_device_the_outside_temperature(context, climate):
     unit = client.put(
         f"/units/{context['unit']}",
         headers=headers,
-        json={"name": f"Unidade Campinas {context['room']}", "city": "campinas"},
+        json={"name": f"Unidade Campinas {context['room']}", "city": "campinas - sp"},
     )
     assert unit.status_code == 200
-    assert (unit.json()["city"], unit.json()["latitude"]) == ("Campinas", -22.9056)
-    assert climate.located == ["campinas"]
+    assert (unit.json()["city"], unit.json()["latitude"]) == ("Campinas - SP", -22.9056)
+    assert climate.located == [("campinas", "SP")]
 
     renamed = client.put(
         f"/units/{context['unit']}",
         headers=headers,
-        json={"name": f"Unidade Centro {context['room']}", "city": "Campinas"},
+        json={"name": f"Unidade Centro {context['room']}", "city": "Campinas - SP"},
     )
     assert renamed.status_code == 200
-    assert climate.located == ["campinas"]
+    assert climate.located == [("campinas", "SP")]
 
     device = client.get("/devices/me/control", headers=context["device_headers"]).json()
     assert (device["temp_outside"], device["humidity_outside"]) == (31.5, 48.0)
     state = client.get(control_url(context), headers=context["professor_headers"]).json()
     assert state["outside"] == {
-        "city": "Campinas",
+        "city": "Campinas - SP",
         "temperature": 31.5,
         "humidity": 48.0,
         "source": "Open-Meteo",
     }
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Campinas - SP", ("Campinas", "SP")),
+        ("bom jesus - pi", ("bom jesus", "PI")),
+        ("Santa Bárbara d'Oeste - SP", ("Santa Bárbara d'Oeste", "SP")),
+        ("Campinas", ("Campinas", None)),
+        ("Campinas - XX", ("Campinas - XX", None)),
+        (" - SP", ("- SP", None)),
+    ],
+)
+def test_split_city_reads_the_state_at_the_end(text, expected):
+    assert split_city(text) == expected
 
 
 def test_unknown_city_or_offline_service_is_reported(context, climate):

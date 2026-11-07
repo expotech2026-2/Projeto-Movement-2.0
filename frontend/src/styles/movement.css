@@ -1400,3 +1400,58 @@ td small {
 .control-manual input {
   width: 76px;
 }
+.city-input {
+  position: relative;
+}
+.city-input input {
+  width: 100%;
+}
+.city-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  max-height: 248px;
+  overflow-y: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  box-shadow: var(--shadow-lg);
+}
+.city-options li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.city-options li.active {
+  background: var(--accent-soft);
+  color: var(--heading);
+}
+.city-options mark {
+  background: none;
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.city-options small {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.city-options li.city-empty {
+  cursor: default;
+  color: var(--muted);
+}

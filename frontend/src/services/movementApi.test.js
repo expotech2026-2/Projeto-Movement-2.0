@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   catalog,
+  cities,
   clearSession,
   fetchReport,
   getSessionToken,
@@ -145,6 +146,20 @@ describe("API Movement", () => {
     await expect(roomAlerts("sala 1")).resolves.toEqual([]);
     expect(fetch).toHaveBeenLastCalledWith(
       `${apiConfig.baseUrl}/rooms/sala%201/alerts?limit=5`,
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
+  it("busca os municípios uma vez e reaproveita a lista", async () => {
+    const list = [{ id: 3509502, name: "Campinas", state: "SP" }];
+    fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify(list), { status: 200 }),
+    );
+    await expect(cities()).resolves.toEqual(list);
+    await expect(cities()).resolves.toEqual(list);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/cities`,
       expect.objectContaining({ cache: "no-store" }),
     );
   });

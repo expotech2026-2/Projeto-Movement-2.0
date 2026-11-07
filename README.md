@@ -334,6 +334,8 @@ No automático, o alvo parte de 24 °C, ajusta pela temperatura externa e descon
 
 **Temperatura externa:** vem da [Open-Meteo](https://open-meteo.com/) (dados CC BY 4.0) para a cidade cadastrada na unidade, sem chave nem custo. O backend guarda as coordenadas ao salvar a unidade e consulta o clima no máximo a cada 15 min por cidade. O plano grátis da Climatempo atende uma cidade só, e as salas ficam em cidades diferentes do estado de São Paulo.
 
+**Sugestões de cidade:** ao digitar a cidade da unidade, o site sugere os municípios do Brasil, com os de SP primeiro. O backend busca a lista na API de localidades do IBGE (`GET /api/cities`) e a guarda na memória por 24 h; nada fica gravado no código nem no banco. A cidade é salva como "Nome - UF", porque há nomes repetidos entre estados, e a UF restringe a busca na Open-Meteo. Sem o IBGE no ar, o campo aceita o nome digitado sem sugestões.
+
 ### Alertas
 
 Cada leitura nova notifica observadores (padrão Observer, em `backend/app/events.py`), que registram alertas de **conforto** e de **umidade** da sala. Eles aparecem no painel e em `GET /api/rooms/{id}/alerts`.

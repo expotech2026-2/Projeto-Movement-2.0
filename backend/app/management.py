@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.climate import ClimateService, ClimateUnavailable
+from app.climate import UF_BY_NAME, ClimateService, ClimateUnavailable, split_city
 from app.dependencies import Climate, Db, require_admin, require_user
 from app.models import DEFAULT_UNIT_ID, DEFAULT_UNIT_NAME, AirConditioner, Device, Room, Unit
 from app.retention import monthly_history
@@ -120,19 +120,22 @@ def default_unit(session: Session) -> Unit:
 
 
 def locate_unit(unit: Unit, climate: ClimateService) -> None:
-    """Grava o nome oficial e as coordenadas da cidade, usadas para a temperatura externa."""
+    """Grava a cidade como "Nome - UF" e as coordenadas usadas para a temperatura externa."""
     if not unit.city:
         unit.latitude = unit.longitude = None
         return
+    name, uf = split_city(unit.city)
     try:
-        place = climate.locate(unit.city)
+        place = climate.locate(name, uf)
     except ClimateUnavailable:
         raise HTTPException(
             503, "Serviço de localização indisponível; tente de novo em instantes"
         ) from None
     if place is None:
         raise HTTPException(422, "Cidade não encontrada")
-    unit.city, unit.latitude, unit.longitude = place.name, place.latitude, place.longitude
+    found = UF_BY_NAME.get(place.state)
+    unit.city = f"{place.name} - {found}" if found else place.name
+    unit.latitude, unit.longitude = place.latitude, place.longitude
 
 
 def create_management_router() -> APIRouter:

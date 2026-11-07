@@ -94,6 +94,10 @@ export function catalog(path) {
   return catalogCache.get(path);
 }
 
+export function cities() {
+  return catalog("/cities");
+}
+
 export function samplingPlan(roomId, budgetRatio = 0.5) {
   return request(
     `/rooms/${encodeURIComponent(roomId)}/sampling-plan?budget_ratio=${budgetRatio}`,

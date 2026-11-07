@@ -11,10 +11,50 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 PREFERRED_STATE = "São Paulo"
 CACHE_SECONDS = 900  # a Open-Meteo atualiza as condições atuais a cada 15 min
 TIMEOUT_SECONDS = 5.0
+# Nomes iguais aos do IBGE e ao campo admin1 da Open-Meteo.
+UF_NAMES = {
+    "AC": "Acre",
+    "AL": "Alagoas",
+    "AP": "Amapá",
+    "AM": "Amazonas",
+    "BA": "Bahia",
+    "CE": "Ceará",
+    "DF": "Distrito Federal",
+    "ES": "Espírito Santo",
+    "GO": "Goiás",
+    "MA": "Maranhão",
+    "MT": "Mato Grosso",
+    "MS": "Mato Grosso do Sul",
+    "MG": "Minas Gerais",
+    "PA": "Pará",
+    "PB": "Paraíba",
+    "PR": "Paraná",
+    "PE": "Pernambuco",
+    "PI": "Piauí",
+    "RJ": "Rio de Janeiro",
+    "RN": "Rio Grande do Norte",
+    "RS": "Rio Grande do Sul",
+    "RO": "Rondônia",
+    "RR": "Roraima",
+    "SC": "Santa Catarina",
+    "SP": "São Paulo",
+    "SE": "Sergipe",
+    "TO": "Tocantins",
+}
+UF_BY_NAME = {name: uf for uf, name in UF_NAMES.items()}
 
 
 class ClimateUnavailable(Exception):
     pass
+
+
+def split_city(text: str) -> tuple[str, str | None]:
+    """'Campinas - SP' vira ('Campinas', 'SP'); sem uma UF válida no fim, a UF é None."""
+    name, separator, uf = text.rpartition(" - ")
+    uf = uf.strip().upper()
+    if separator and name.strip() and uf in UF_NAMES:
+        return name.strip(), uf
+    return text.strip(), None
 
 
 @dataclass(frozen=True)
@@ -32,7 +72,7 @@ class Outside:
 
 
 class ClimateService(Protocol):
-    def locate(self, city: str) -> Place | None: ...
+    def locate(self, city: str, uf: str | None = None) -> Place | None: ...
 
     def outside(self, latitude: float, longitude: float) -> Outside | None: ...
 
@@ -42,8 +82,8 @@ class OpenMeteoClimate:
         self.timeout = timeout
         self._cache: dict[tuple[float, float], tuple[float, Outside]] = {}
 
-    def locate(self, city: str) -> Place | None:
-        """Coordenadas da cidade no Brasil, preferindo o estado de São Paulo."""
+    def locate(self, city: str, uf: str | None = None) -> Place | None:
+        """Coordenadas da cidade no Brasil: só na UF informada ou, sem UF, preferindo SP."""
         try:
             response = httpx.get(
                 GEOCODING_URL,
@@ -54,6 +94,8 @@ class OpenMeteoClimate:
             results = response.json().get("results") or []
         except (httpx.HTTPError, ValueError) as error:
             raise ClimateUnavailable from error
+        if uf:
+            results = [item for item in results if item.get("admin1") == UF_NAMES[uf]]
         if not results:
             return None
         best = next((item for item in results if item.get("admin1") == PREFERRED_STATE), results[0])
