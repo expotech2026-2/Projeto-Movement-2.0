@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import Principal, resolve_session
+from app.climate import ClimateService
 from app.models import Device
 from app.repository import PostgresTelemetryRepository, TelemetryRepository
 from app.security import hash_device_token
@@ -65,6 +66,13 @@ def require_device(session: Db, credentials: Credentials) -> Device:
 
 
 CurrentDevice = Annotated[Device, Depends(require_device)]
+
+
+def climate_service(request: Request) -> ClimateService:
+    return request.app.state.climate
+
+
+Climate = Annotated[ClimateService, Depends(climate_service)]
 
 
 def telemetry_repository(session: Db) -> TelemetryRepository:

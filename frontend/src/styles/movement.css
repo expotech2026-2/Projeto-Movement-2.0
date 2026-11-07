@@ -1374,3 +1374,29 @@ td small {
     left: 10px;
   }
 }
+.room-control .control-status {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.control-manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.control-manual label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.control-manual input {
+  width: 76px;
+}

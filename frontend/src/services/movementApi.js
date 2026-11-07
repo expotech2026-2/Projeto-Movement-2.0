@@ -103,3 +103,14 @@ export function samplingPlan(roomId, budgetRatio = 0.5) {
 export function roomAlerts(roomId, limit = 5) {
   return request(`/rooms/${encodeURIComponent(roomId)}/alerts?limit=${limit}`);
 }
+
+export function roomControl(roomId) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/control`);
+}
+
+export function setRoomControl(roomId, command) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/control`, {
+    method: "PUT",
+    body: JSON.stringify(command),
+  });
+}

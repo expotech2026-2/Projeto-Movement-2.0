@@ -13,6 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.auth import authenticate, issue_principal_session
 from app.catalog import create_catalog_router
+from app.climate import OpenMeteoClimate
+from app.control import create_control_router
 from app.database import build_session_factory
 from app.dependencies import CurrentUser, Db, Repository, require_device, require_user
 from app.events import create_alerts_router, default_subject
@@ -34,7 +36,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0005_alerts"
+SCHEMA_VERSION = "0006_room_control"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -61,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = config
     app.state.sessions = sessions
     app.state.telemetry_events = default_subject()
+    app.state.climate = OpenMeteoClimate()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.cors_origins,
@@ -182,4 +185,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_reports_router())
     app.include_router(create_sampling_router())
     app.include_router(create_alerts_router())
+    app.include_router(create_control_router())
     return app

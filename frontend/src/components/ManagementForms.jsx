@@ -21,7 +21,11 @@ const number = (value) => Number(value).toLocaleString("pt-BR");
 function initialValues(editing, units) {
   const item = editing.item;
   if (editing.type === "unit")
-    return { name: item?.name || "", address: item?.address || "" };
+    return {
+      name: item?.name || "",
+      address: item?.address || "",
+      city: item?.city || "",
+    };
   if (editing.type === "room")
     return {
       unit_id: item?.unit_id || editing.unitId || units[0]?.id || "",
@@ -148,6 +152,19 @@ function UnitFields({ values, update }) {
           onChange={(e) => update({ address: e.target.value })}
         />
       </label>
+      <label>
+        Cidade
+        <input
+          maxLength={120}
+          placeholder="Ex.: Campinas"
+          value={values.city}
+          onChange={(e) => update({ city: e.target.value })}
+        />
+      </label>
+      <p className="field-hint">
+        A temperatura externa das salas vem da Open-Meteo para esta cidade. Sem
+        cidade, o ESP32 usa o sensor externo, se houver.
+      </p>
     </>
   );
 }

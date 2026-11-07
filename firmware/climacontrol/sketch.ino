@@ -47,13 +47,16 @@ DHT dhtInterno(DHTPIN_INTERNO, DHTTYPE);
 const float VOLUME_SALA_M3      = 50.0;
 const float DENSIDADE_AR        = 1.2;
 const float CALOR_ESPECIFICO_AR = 1005.0;
-const float WATTS_POR_PESSOA    = 150.0;
 const float FATOR_RETENCAO      = 0.30;
 
 // ── Conforto / AC ──────────────────────────────────────────────────────────
 const float TEMP_CONFORTO_BASE      = 24.0;
-const float REDUCAO_POR_PESSOA      = 0.3;
-const float TEMP_AC_MIN             = 18.0;
+const float NR17_MIN                = 18.0;   // NR-17, 17.8.4.2: 18 a 25 °C em ambiente climatizado
+const float NR17_MAX                = 25.0;
+const float TEMP_CORPO              = 36.5;   // temperatura média do corpo humano
+const float CONDUTANCIA_PESSOA      = 5.6;    // W/K: 70 W de calor sensível a 24 °C, pessoa sentada
+const float HORIZONTE_PREVISAO_S    = 600.0;  // o alvo antecipa o calor dos próximos 10 min
+const float TEMP_AC_MIN             = 16.0;   // faixa do comando manual (professor)
 const float TEMP_AC_MAX             = 30.0;
 const float TOLERANCIA_AC           = 0.5;
 
@@ -62,8 +65,9 @@ enum ModoAC { MODO_AUTOMATICO, MODO_MANUAL };
 ModoAC modoAtual = MODO_AUTOMATICO;
 
 // Quanto tempo o modo manual permanece ativo antes de voltar ao automático
-const unsigned long MANUAL_TIMEOUT_MS = 30UL * 60UL * 1000UL; // 30 min
+const unsigned long MANUAL_TIMEOUT_MS = 2UL * 60UL * 60UL * 1000UL; // 2 h
 unsigned long inicioModoManual = 0;
+unsigned long duracaoManual    = MANUAL_TIMEOUT_MS;   // o site manda o tempo que falta
 
 // ── Estados ────────────────────────────────────────────────────────────────
 int totalPessoas          = 0;
@@ -96,6 +100,11 @@ unsigned long ultimaConsultaPlano = 0;
 const unsigned long intervaloDHT      = 2000;
 unsigned long intervaloEnvio          = 16000; // ajustado pelo plano otimizado da API (15 a 300 s)
 const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cada 15 min
+
+// ── Comando do professor e temperatura externa (site) ──────────────────────
+unsigned long ultimaConsultaControle = 0;
+long versaoControle = -1;            // último comando do site já aplicado
+bool externaDoSite  = false;         // temperatura externa da Open-Meteo, pela cidade da unidade
 
 // ── Pulsos IR (LED) ────────────────────────────────────────────────────────
 // Um pulso por comando, e a duração diz qual é; o alvo muda 1 °C por pulso.
@@ -151,6 +160,8 @@ void setup() {
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   atualizarIntervalo();
   ultimaConsultaPlano = millis();
+  consultarControle();
+  ultimaConsultaControle = millis();
   atualizarAutomatico();
   Serial.println(F("Sistema pronto. Modo inicial: AUTOMATICO\n"));
 }
@@ -170,12 +181,30 @@ void conectarWiFi() {
 }
 
 // ── Temperatura recomendada (modo automático) ──────────────────────────────
-float calcularTempRecomendada(float tempExterna) {
+// Calor sensível de uma pessoa: proporcional à diferença entre o corpo e o ar.
+float calorPorPessoa(float tempSala) {
+  return max(0.0f, CONDUTANCIA_PESSOA * (TEMP_CORPO - tempSala));
+}
+
+// Quanto as pessoas aquecem o ar em "segundos" (só a fração do calor que fica no ar).
+float aquecimentoPessoas(int pessoas, float tempSala, float segundos) {
+  float massa = VOLUME_SALA_M3 * DENSIDADE_AR;
+  return pessoas * calorPorPessoa(tempSala) * segundos * FATOR_RETENCAO /
+         (massa * CALOR_ESPECIFICO_AR);
+}
+
+// Alvo: conforto pela temperatura externa menos o aquecimento previsto, dentro da NR-17.
+float calcularTempRecomendada(float tempExterna, float tempSala, int pessoas) {
   float r = TEMP_CONFORTO_BASE;
   if (tempExterna > 30.0)      r -= 1.0;
   else if (tempExterna < 22.0) r += 1.5;
-  if (totalPessoas > 1)        r -= (totalPessoas - 1) * REDUCAO_POR_PESSOA;
-  return constrain(r, TEMP_AC_MIN, TEMP_AC_MAX);
+  r -= aquecimentoPessoas(pessoas, tempSala, HORIZONTE_PREVISAO_S);
+  return constrain(r, NR17_MIN, NR17_MAX);
+}
+
+// Temperatura da sala para o cálculo: a do DHT ou, antes da primeira leitura, a de conforto.
+float tempSalaParaCalculo() {
+  return primeiraLeitura ? TEMP_CONFORTO_BASE : tempInterna;
 }
 
 // Regra do circuito combinacional: F = A · not(C) · (M + B).
@@ -240,12 +269,19 @@ void definirAlvoAC(float novoAlvo, const char* origem) {
 // ── Atualiza alvo no modo automático ───────────────────────────────────────
 void atualizarAutomatico() {
   if (modoAtual != MODO_AUTOMATICO) return;
-  tempRecomendada = calcularTempRecomendada(tempExternaAtual);
+  tempRecomendada = calcularTempRecomendada(tempExternaAtual, tempSalaParaCalculo(), totalPessoas);
   definirAlvoAC(tempRecomendada, "AUTOMATICO");
 }
 
+// Entra no modo manual pelo tempo indicado; depois volta sozinho ao automático.
+void entrarManual(unsigned long duracaoMs) {
+  modoAtual = MODO_MANUAL;
+  inicioModoManual = millis();
+  duracaoManual = duracaoMs;
+}
+
 // ── Comando manual digitado no monitor serial ──────────────────────────────
-// AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP-, a temperatura alvo (18 a 30), IR <protocolo> ou IR_TESTE.
+// AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP-, a temperatura alvo (16 a 30), IR <protocolo> ou IR_TESTE.
 void processarComandoManual(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
@@ -265,14 +301,14 @@ void processarComandoManual(String cmd) {
 
   // Entra em modo manual sem mexer no alvo.
   if (cmd == "MANUAL_ON" || cmd == "MANUAL") {
-    modoAtual = MODO_MANUAL; inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     Serial.println(F("[MODO] -> MANUAL"));
     return;
   }
 
   // Liga o A/C (retoma o resfriamento até o alvo).
   if (cmd == "AC_ON") {
-    modoAtual = MODO_MANUAL; inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     acForcadoOff = false;
     Serial.println(F("[CMD] AC_ON — aparelho ligado"));
     return;
@@ -280,7 +316,7 @@ void processarComandoManual(String cmd) {
 
   // Desliga o A/C (mantém modo manual).
   if (cmd == "AC_OFF") {
-    modoAtual = MODO_MANUAL; inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     acForcadoOff = true;
     acLigado = false;
     Serial.println(F("[CMD] AC_OFF — aparelho desligado"));
@@ -289,13 +325,13 @@ void processarComandoManual(String cmd) {
 
   // Ajustes relativos
   if (cmd == "TEMP+" || cmd == "UP") {
-    modoAtual = MODO_MANUAL; inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     acForcadoOff = false;
     definirAlvoAC(tempAlvoAC + 1, "MANUAL (+1)");
     return;
   }
   if (cmd == "TEMP-" || cmd == "DOWN") {
-    modoAtual = MODO_MANUAL; inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     acForcadoOff = false;
     definirAlvoAC(tempAlvoAC - 1, "MANUAL (-1)");
     return;
@@ -312,33 +348,24 @@ void processarComandoManual(String cmd) {
   if (num.length() > 0) valor = num.toInt();
 
   if (valor >= TEMP_AC_MIN && valor <= TEMP_AC_MAX) {
-    modoAtual = MODO_MANUAL;
-    inicioModoManual = millis();
+    entrarManual(MANUAL_TIMEOUT_MS);
     acForcadoOff = false;
     Serial.println(F("[MODO] -> MANUAL (automatico suspenso)"));
     definirAlvoAC(valor, "MANUAL (serial)");
   } else {
-    Serial.println(F("[Manual] Comando ignorado (fora de 18-30 ou invalido)"));
+    Serial.println(F("[Manual] Comando ignorado (fora de 16-30 ou invalido)"));
   }
 }
 
 // ── Verifica timeout do modo manual ────────────────────────────────────────
 void verificarTimeoutManual() {
   if (modoAtual == MODO_MANUAL &&
-      millis() - inicioModoManual >= MANUAL_TIMEOUT_MS) {
+      millis() - inicioModoManual >= duracaoManual) {
     modoAtual = MODO_AUTOMATICO;
+    acForcadoOff = false;   // um "desligar" também vence junto com o manual
     Serial.println(F("\n[MODO] Timeout manual -> retornando ao AUTOMATICO"));
     atualizarAutomatico();
   }
-}
-
-// ── Calor emitido pelas pessoas (docs/fisica.md, seção 8) ──────────────────
-float calcularDeltaTemperatura(unsigned long deltaMs) {
-  if (totalPessoas == 0) return 0.0;
-  float pot   = totalPessoas * WATTS_POR_PESSOA;
-  float seg   = deltaMs / 1000.0;
-  float massa = VOLUME_SALA_M3 * DENSIDADE_AR;
-  return (pot * seg * FATOR_RETENCAO) / (massa * CALOR_ESPECIFICO_AR);
 }
 
 // ── Leitura dos DHTs ───────────────────────────────────────────────────────
@@ -348,8 +375,9 @@ void lerClima() {
   float hExt = dhtExterno.readHumidity();
   float hInt = dhtInterno.readHumidity();
 
-  if (!isnan(tExt)) tempExternaAtual = tExt;
-  if (!isnan(hExt)) umidExternaAtual = hExt;
+  // O sensor externo só vale quando o site não tem a temperatura da cidade.
+  if (!isnan(tExt) && !externaDoSite) tempExternaAtual = tExt;
+  if (!isnan(hExt) && !externaDoSite) umidExternaAtual = hExt;
   if (!isnan(hInt)) umidInternaAtual = hInt;
   if (!isnan(tInt)) {
     tempInterna = tInt;
@@ -362,7 +390,7 @@ void lerClima() {
 
   Serial.println(F("\n+------- LEITURA / STATUS -------+"));
   Serial.printf("| Modo:        %s\n", modoAtual == MODO_AUTOMATICO ? "AUTOMATICO" : "MANUAL");
-  Serial.printf("| Externa:     %.1f C\n", tempExternaAtual);
+  Serial.printf("| Externa:     %.1f C (%s)\n", tempExternaAtual, externaDoSite ? "Open-Meteo" : "sensor");
   if (primeiraLeitura) Serial.println(F("| Interna:     sem leitura"));
   else Serial.printf("| Interna:     %.1f C\n", tempInterna);
   Serial.printf("| Umid in/ext: %.0f%% / %.0f%%\n", umidInternaAtual, umidExternaAtual);
@@ -370,8 +398,9 @@ void lerClima() {
   Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "RESFRIANDO" : "espera");
   Serial.printf("| Aparelho:    %s em %d C (%s)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado,
                 protocoloAC == decode_type_t::UNKNOWN ? "IR simulado" : typeToString(protocoloAC).c_str());
-  Serial.printf("| Pessoas:     %d  (%.0f W, +%.2f C/min estimado)\n", totalPessoas,
-                totalPessoas * WATTS_POR_PESSOA, calcularDeltaTemperatura(60000));
+  float tempSala = tempSalaParaCalculo();
+  Serial.printf("| Pessoas:     %d  (%.0f W do corpo, +%.2f C/min)\n", totalPessoas,
+                totalPessoas * calorPorPessoa(tempSala), aquecimentoPessoas(totalPessoas, tempSala, 60));
   Serial.println(F("+-------------------------------+"));
 }
 
@@ -456,6 +485,73 @@ void atualizarIntervalo() {
   } else {
     Serial.printf("[Movement] plano indisponivel (HTTP %d); mantendo %lu s\n", code, intervaloEnvio / 1000);
   }
+  http.end();
+}
+
+// ── Comando do professor (site) ────────────────────────────────────────────
+// Valor de um campo do JSON plano da API, sem aspas ("" se faltar ou for null).
+String campoJson(const String& corpo, const char* nome) {
+  String chave = String("\"") + nome + "\":";
+  int i = corpo.indexOf(chave);
+  if (i < 0) return "";
+  i += chave.length();
+  if (corpo.charAt(i) == '"') {
+    int fim = corpo.indexOf('"', i + 1);
+    return fim < 0 ? "" : corpo.substring(i + 1, fim);
+  }
+  int fim = i;
+  while (fim < (int)corpo.length() && corpo.charAt(fim) != ',' && corpo.charAt(fim) != '}') fim++;
+  String valor = corpo.substring(i, fim);
+  valor.trim();
+  return valor == "null" ? "" : valor;
+}
+
+// Aplica cada comando do site uma vez (pela versão) e guarda a temperatura externa da cidade.
+void aplicarControle(const String& corpo) {
+  String tExt = campoJson(corpo, "temp_outside");
+  externaDoSite = tExt.length() > 0;
+  if (externaDoSite) {
+    tempExternaAtual = tExt.toFloat();
+    String hExt = campoJson(corpo, "humidity_outside");
+    if (hExt.length() > 0) umidExternaAtual = hExt.toFloat();
+  }
+  long versao = campoJson(corpo, "version").toInt();
+  if (versao == versaoControle) return;
+  versaoControle = versao;
+  String modo = campoJson(corpo, "mode");
+  long restante = campoJson(corpo, "remaining_seconds").toInt();
+  Serial.printf("\n[SITE] Comando %ld do professor: %s\n", versao, modo.c_str());
+  if (modo == "auto" || restante <= 0) {
+    modoAtual = MODO_AUTOMATICO;
+    acForcadoOff = false;
+    atualizarAutomatico();
+    return;
+  }
+  entrarManual((unsigned long)restante * 1000UL);
+  acForcadoOff = modo == "off";
+  if (acForcadoOff) acLigado = false;
+  else definirAlvoAC(campoJson(corpo, "target").toFloat(), "SITE (professor)");
+}
+
+// Sala ocupada ou em manual: consulta a cada 15 s; vazia, a cada 1 min (gasta menos energia).
+unsigned long intervaloControle() {
+  return totalPessoas > 0 || modoAtual == MODO_MANUAL ? 15000UL : 60000UL;
+}
+
+void consultarControle() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
+  String url = MOVEMENT_API_URL;
+  url.replace("/telemetry", "/devices/me/control");
+  HTTPClient http;
+  WiFiClient plainClient;
+  WiFiClientSecure secureClient;
+  if (!abrirMovement(http, plainClient, secureClient, url)) return;
+  http.setTimeout(5000);
+  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  int code = http.GET();
+  if (code == 200) aplicarControle(http.getString());
+  else Serial.printf("[SITE] comando indisponivel (HTTP %d)\n", code);
   http.end();
 }
 
@@ -650,6 +746,12 @@ void loop() {
   if (agora - ultimaConsultaPlano >= intervaloConsultaPlano) {
     ultimaConsultaPlano = agora;
     atualizarIntervalo();
+  }
+
+  // 5b) Comando do professor e temperatura externa, pelo site
+  if (agora - ultimaConsultaControle >= intervaloControle()) {
+    ultimaConsultaControle = agora;
+    consultarControle();
   }
 
   // 6) Envio da leitura para a API do Movement

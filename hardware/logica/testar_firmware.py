@@ -1,4 +1,4 @@
-"""Extrai do sketch.ino a lógica da porta e dos comandos IR, compila com os testes e os roda."""
+"""Extrai do sketch.ino a porta, os comandos IR e o conforto, compila com os testes e os roda."""
 
 import os
 import shutil
@@ -56,9 +56,24 @@ def main() -> int:
         )
         + "}\n",
     }
+    conforto = {
+        "conforto_globais.inc": extract(
+            text, "// ── Parâmetros físicos da sala", "const float TOLERANCIA_AC           = 0.5;"
+        ),
+        "conforto_funcoes.inc": extract(
+            text,
+            "// Calor sensível de uma pessoa",
+            "  return constrain(r, NR17_MIN, NR17_MAX);",
+        )
+        + "}\n",
+    }
     with tempfile.TemporaryDirectory() as tmp:
         build = Path(tmp)
-        return run_test(build, "teste_porta", porta) or run_test(build, "teste_ir", ir)
+        return (
+            run_test(build, "teste_porta", porta)
+            or run_test(build, "teste_ir", ir)
+            or run_test(build, "teste_conforto", conforto)
+        )
 
 
 if __name__ == "__main__":

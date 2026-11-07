@@ -249,7 +249,7 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
 6. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`. Quando a última pessoa sai, o LED acende por 1,5 s e aparece `[IR] DESLIGAR (1500 ms)`.
 7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "RESFRIANDO".
 8. **Modo manual (entrada M):** digite no campo do monitor serial e tecle Enter.
-   - `22` (ou outra temperatura de 18 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
+   - `22` (ou outra temperatura de 16 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
    - `AC_OFF`: força o compressor desligado ($\overline{C}$ = 0) e manda `[IR] DESLIGAR`.
    - `AUTO`: volta ao automático.
 
@@ -258,7 +258,7 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
 ```bash
 python hardware/logica/verificar_logica.py            # OK: ... conferidas
 python hardware/logica/verificar_logica.py --markdown # tabelas desta página
-python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta e 22 passos do IR
+python hardware/logica/testar_firmware.py             # OK: porta, comandos IR e conforto
 ```
 
 `verificar_logica.py` confere:

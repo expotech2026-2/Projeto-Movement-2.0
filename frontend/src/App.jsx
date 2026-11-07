@@ -11,6 +11,7 @@ import { ManagementForm } from "./components/ManagementForms";
 import { OperatorLogin } from "./components/OperatorLogin";
 import { ReportsView } from "./components/ReportsView";
 import { RoomAlerts } from "./components/RoomAlerts";
+import { RoomControl } from "./components/RoomControl";
 import { UnitsView } from "./components/UnitsView";
 import { UsersView } from "./components/UsersView";
 import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
@@ -189,7 +190,11 @@ function Workspace({ user, onLogout }) {
     if (type === "unit") {
       await request(`/units${item ? `/${item.id}` : ""}`, {
         method,
-        body: JSON.stringify({ name: values.name, address: values.address }),
+        body: JSON.stringify({
+          name: values.name,
+          address: values.address,
+          city: values.city,
+        }),
       });
       await refreshDirectory();
     } else if (type === "room") {
@@ -672,6 +677,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           </article>
         ))}
       </div>
+      {room?.id && <RoomControl roomId={room.id} refresh={feed.updatedAt} />}
       <section className="panel chart-panel">
         <div className="section-heading">
           <div>

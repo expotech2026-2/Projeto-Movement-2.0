@@ -7,7 +7,9 @@ import {
   login,
   request,
   roomAlerts,
+  roomControl,
   samplingPlan,
+  setRoomControl,
 } from "./movementApi";
 import { apiConfig } from "../config/api";
 
@@ -144,6 +146,39 @@ describe("API Movement", () => {
     expect(fetch).toHaveBeenLastCalledWith(
       `${apiConfig.baseUrl}/rooms/sala%201/alerts?limit=5`,
       expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
+  it("consulta o comando do ar-condicionado da sala", async () => {
+    const control = { mode: "auto", target: null, version: 0, outside: null };
+    fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify(control), { status: 200 }),
+    );
+    await expect(roomControl("sala 1")).resolves.toEqual(control);
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala%201/control`,
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
+
+  it("envia o comando manual do professor com PUT", async () => {
+    fetch.mockResolvedValueOnce(
+      new Response('{"mode":"manual","target":21,"version":1}', {
+        status: 200,
+      }),
+    );
+    await expect(
+      setRoomControl("sala-1", { mode: "manual", target: 21 }),
+    ).resolves.toEqual({ mode: "manual", target: 21, version: 1 });
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala-1/control`,
+      expect.objectContaining({
+        method: "PUT",
+        body: '{"mode":"manual","target":21}',
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+      }),
     );
   });
 

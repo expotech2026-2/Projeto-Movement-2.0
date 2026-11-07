@@ -37,9 +37,9 @@ Não é preciso conversor de nível nem optoacoplador. A saída das barreiras é
   - corta A, depois B, e libera = **entrada** (ocupação +1);
   - corta B, depois A, e libera = **saída** (ocupação −1).
 - As barreiras devem ficar a **15 cm ou mais** uma da outra. Mais perto que isso, uma pessoa corta as duas ao mesmo tempo e o sentido fica ambíguo.
-- No modo automático, o resfriamento só atua com a sala ocupada e a temperatura mais de 0,5 °C acima do alvo. O alvo cai 0,3 °C por pessoa, partindo de 24 °C, entre 18 e 30 °C.
+- No modo automático, o aparelho só fica ligado com a sala ocupada. O alvo parte de 24 °C (23 °C com mais de 30 °C lá fora, 25,5 °C com menos de 22 °C), desconta o aquecimento que as pessoas causam em 10 minutos, calculado pela temperatura do corpo (36,5 °C), e fica entre 18 e 25 °C, a faixa da NR-17 (`docs/fisica.md`, seção 8).
 - O LED IR liga o aparelho quando alguém entra (ou no modo manual) e o desliga quando a sala esvazia no modo automático ou com `AC_OFF`. O alvo vai no mesmo comando (seção "Comando IR ao ar-condicionado").
-- O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 30 min.
+- O modo manual permite resfriar mesmo com a sala vazia e volta ao automático depois de 2 h. Ele vem do site (professor ou administrador) ou do monitor serial.
   - Os comandos são digitados no monitor serial: `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-`, a temperatura alvo, `IR <protocolo>` ou `IR_TESTE`.
   - O ThingSpeak/TalkBack do projeto original foi removido.
 
@@ -53,10 +53,11 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 - Lê os sensores a cada 2 s e envia ao `POST /api/telemetry` com o token Bearer. O intervalo de envio vem do plano otimizado, consultado a cada 15 min.
 - Usa NTP para o horário e um UUID por mensagem. O reenvio mantém o mesmo conteúdo até a confirmação. A fila guarda uma mensagem na RAM.
 - As barreiras são lidas a cada 10 ms numa tarefa própria, no núcleo 0. Um envio HTTP ou a reconexão do Wi-Fi não fazem perder passagens.
-- A temperatura interna enviada à API é a medida pelo DHT. O calor das pessoas (`docs/fisica.md`, seção 8) aparece só como estimativa no monitor serial.
+- A temperatura interna enviada à API é a medida pelo DHT. A externa vem do site (Open-Meteo, pela cidade da unidade); sem cidade, do DHT externo, se houver.
+- A cada 15 s com a sala ocupada (1 min com ela vazia), o ESP32 busca em `GET /api/devices/me/control` o comando do professor e a temperatura externa. Cada comando tem uma versão e é aplicado uma vez; o monitor serial mostra `[SITE] Comando N do professor`.
 - Sem protocolo IR configurado, o LED manda pulsos simulados: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga, com 200 ms de pausa. Com protocolo, manda o código do fabricante.
 
-O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta e 22 passos do IR (pulsos simulados e protocolo real) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
+O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 22 passos do IR (pulsos simulados e protocolo real) e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
 
 ## Comando IR ao ar-condicionado
 

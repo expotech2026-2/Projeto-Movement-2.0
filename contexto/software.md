@@ -32,7 +32,7 @@ O sistema é um **monólito modular**: uma única imagem Docker com a API e o bu
 - Cadastro do ESP32 por sala, com o token exibido uma única vez.
 - Plano de envio otimizado: intervalo de envio do ESP32 por hora do dia.
 
-O site **não liga nem desliga** aparelhos: o estado do A/C vem da telemetria e a decisão de resfriar é do ESP32.
+O site comanda o aparelho por meio do ESP32: o professor fixa a temperatura ou desliga (`PUT /api/rooms/{id}/control`, válido por 2 h), e o ESP32 busca o comando em `GET /api/devices/me/control`, junto com a temperatura externa da Open-Meteo. O estado do A/C vem da telemetria.
 
 ## Banco de dados
 
@@ -73,6 +73,7 @@ A documentação interativa fica em `/api/docs`. Principais grupos de rotas:
 | `/api/rooms/{id}/latest`, `/history`, `/monthly`, `/alerts` | Consultas da sala |
 | `/api/reports/pdf` | Relatórios |
 | `/api/rooms/{id}/sampling-plan`, `/api/devices/me/sampling-interval` | Plano de envio otimizado |
+| `/api/rooms/{id}/control`, `/api/devices/me/control` | Comando do professor e temperatura externa (Open-Meteo) |
 
 ## Padrões de projeto
 

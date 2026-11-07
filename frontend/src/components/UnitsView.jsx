@@ -79,7 +79,7 @@ export function UnitsView({
             <div className="unit-title">
               <h3>{unit.name}</h3>
               <p className="muted">
-                {[unit.address, plural(total, "sala", "salas")]
+                {[unit.address, unit.city, plural(total, "sala", "salas")]
                   .filter(Boolean)
                   .join(" · ")}
               </p>
