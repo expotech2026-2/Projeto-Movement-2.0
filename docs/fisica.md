@@ -129,14 +129,14 @@ No Wokwi, o PIR funciona em 3,3 V por simplificação da simulação. Na montage
 
 ## 8. Modelo térmico da sala (complementar)
 
-O firmware simula o aquecimento causado pelas pessoas na sala (`calcularDeltaTemperatura()` em `sketch.ino`): parte do calor emitido pelas pessoas aquece a massa de ar da sala.
+O firmware estima o aquecimento causado pelas pessoas na sala (`calcularDeltaTemperatura()` em `sketch.ino`): parte do calor emitido pelas pessoas aquece a massa de ar da sala. A estimativa aparece no monitor serial em °C/min; a temperatura interna enviada à API é a medida pelo DHT.
 
 $$\Delta T = \frac{P \cdot t \cdot f}{m \cdot c}, \qquad m = \rho \cdot V_{sala}$$
 
 | Símbolo | Valor | Significado |
 | --- | --- | --- |
 | $P$ | 150 W por pessoa | Calor emitido por uma pessoa em repouso |
-| $t$ | 10 s | Intervalo do cálculo (`intervaloCalor`) |
+| $t$ | 10 s | Intervalo de tempo do exemplo |
 | $f$ | 0,3 | Fração do calor retida no ar (`FATOR_RETENCAO`) |
 | $\rho$ | 1,2 kg/m³ | Densidade do ar |
 | $V_{sala}$ | 50 m³ | Volume da sala |

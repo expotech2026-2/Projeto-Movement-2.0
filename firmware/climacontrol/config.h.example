@@ -1,5 +1,11 @@
 #define MOVEMENT_API_URL "http://192.168.0.10:8000/telemetry"
 #define MOVEMENT_DEVICE_TOKEN "COLE_A_CREDENCIAL_DO_DISPOSITIVO"
 #define MOVEMENT_CA_CERT ""
+// Rede Wi-Fi da montagem. Sem estas linhas o firmware tenta a rede do Wokwi.
+#define MOVEMENT_WIFI_SSID "NOME_DA_REDE"
+#define MOVEMENT_WIFI_PASSWORD "SENHA_DA_REDE"
 // Montagem real (docs/fisica.md, seção 9.4). Sem esta linha o firmware usa DHT22, o modelo do Wokwi.
 #define MOVEMENT_DHT_TYPE DHT11
+// Protocolo IR do ar-condicionado (contexto/hardware.md). Sem ele, o LED só pisca pulsos simulados.
+// O comando serial "IR <nome>" grava outro protocolo na flash e vale mais que este.
+// #define MOVEMENT_AC_PROTOCOLO "GREE"

@@ -410,13 +410,16 @@ No modo automático, o resfriamento só atua com a sala ocupada, e o LED IR desl
 - Copie `firmware/climacontrol/config.h.example` para `config.h` e configure:
   - URL da API: em produção, `https://NOME-DO-APP.azurewebsites.net/api/telemetry`;
   - token do dispositivo;
-  - certificado raiz do domínio (`MOVEMENT_CA_CERT`).
+  - certificado raiz do domínio (`MOVEMENT_CA_CERT`);
+  - rede Wi-Fi (`MOVEMENT_WIFI_SSID` e `MOVEMENT_WIFI_PASSWORD`);
+  - protocolo IR do ar-condicionado (`MOVEMENT_AC_PROTOCOLO`), opcional.
   O arquivo é privado e o Git o ignora.
 - Para o DHT11 da montagem, inclua `#define MOVEMENT_DHT_TYPE DHT11` no `config.h`. Sem essa linha vale o DHT22, que é o modelo do Wokwi.
 - O relógio é sincronizado por NTP e cada mensagem usa um UUID. Os reenvios mantêm o mesmo conteúdo até a confirmação.
 - A fila guarda uma mensagem em RAM e não substitui uma fila persistente em flash.
+- **Bibliotecas:** instale pelo Library Manager a DHT sensor library e a IRremoteESP8266 (v2.9.0 ou mais nova).
 - **Modo manual:** digite no monitor serial `AUTO`, `MANUAL`, `AC_ON`, `AC_OFF`, `TEMP+`, `TEMP-` ou a temperatura alvo (de 18 a 30). Ele volta ao automático depois de 30 min. O ThingSpeak/TalkBack do projeto original foi removido.
-- **Comandos IR:** um pulso por comando no LED, e a duração diz qual é: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga. O monitor serial mostra cada um, por exemplo `[IR] BAIXAR (100 ms) -> aparelho ligado em 23 C`.
+- **Comando IR:** com o protocolo do aparelho (por exemplo `IR GREE` no monitor serial), o LED manda o código do fabricante. `IR_TESTE` experimenta os protocolos das marcas comuns no Brasil; a tabela está em [contexto/hardware.md](contexto/hardware.md#comando-ir-ao-ar-condicionado). Sem protocolo, o LED pisca pulsos simulados (100 ms baixa 1 °C, 300 ms sobe, 800 ms liga, 1,5 s desliga).
 
 Na rede local, o ESP32 físico precisa alcançar a API: rode o Uvicorn com `--host 0.0.0.0` e informe o IP do computador no firmware. Para testar sem hardware, publique uma leitura simulada. O token é solicitado sem eco, e o comando é só para desenvolvimento:
 
@@ -527,6 +530,6 @@ A lista completa, incluindo `ruff format --check`, está no [AGENTS.md](AGENTS.m
 ## Limitações
 
 - O site não envia comandos físicos aos aparelhos.
-- O LED IR manda pulsos simples (a duração diz o comando) e não implementa o protocolo real dos fabricantes.
+- O protocolo IR de cada aparelho precisa ser confirmado no próprio aparelho (`IR_TESTE`), e o ESP32 não sabe se o comando chegou: não há retorno do aparelho.
 - O CI não compila o firmware, só testa a lógica da porta e dos comandos IR; o firmware ainda não foi gravado num ESP32 real.
 - Medição de energia por aparelho e permissões por sala exigem implementações adicionais.

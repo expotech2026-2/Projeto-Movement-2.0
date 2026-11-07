@@ -199,7 +199,7 @@ bool podeResfriar() {                     // seção 6: (M + B)
 bool acDeveFicarLigado() {                // seção 6: not(C) · (M + B), liga ou desliga pelo IR
   return !acForcadoOff && podeResfriar();
 }
-// passoAC(): if (desvio > TOLERANCIA_AC && podeResfriar())   →  A · (M + B), com C tratado antes
+// atualizarResfriamento(): acDeveFicarLigado() && desvio > TOLERANCIA_AC  →  A · not(C) · (M + B)
 ```
 
 O script `hardware/logica/verificar_logica.py` implementa a mesma especificação de `passoPorta()` (`door_spec`) e confere que as equações dos flip-flops a reproduzem.
@@ -247,7 +247,7 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
 4. **Velocidade:** mantenha a janela do navegador visível. Com a aba em segundo plano, a simulação cai para poucos por cento do tempo real. O `millis()` simulado não acompanha a rede, e o tempo medido no `[Movement] HTTP ... em N ms` sai baixo demais.
 5. **Entrada:** clique em "Barreira A (fora)" e, menos de 2 s depois, em "Barreira B (dentro)". Quando os dois voltarem a 0, o monitor serial mostra `[PRESENCA] ENTRADA (+1)`. Na primeira entrada, o LED acende por 0,8 s e aparece `[IR] LIGAR (800 ms)`.
 6. **Saída:** a mesma coisa, começando por B: `[PRESENCA] SAIDA (-1)`. Quando a última pessoa sai, o LED acende por 1,5 s e aparece `[IR] DESLIGAR (1500 ms)`.
-7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "ALTERANDO".
+7. **Regra do resfriamento:** com a sala vazia em modo automático, o status fica em "espera"; com alguém na sala e a temperatura acima do alvo, passa a "RESFRIANDO".
 8. **Modo manual (entrada M):** digite no campo do monitor serial e tecle Enter.
    - `22` (ou outra temperatura de 18 a 30): mostra `[Manual] Comando recebido: 22` e `[MODO] -> MANUAL`, e o resfriamento passa a atuar mesmo com a sala vazia.
    - `AC_OFF`: força o compressor desligado ($\overline{C}$ = 0) e manda `[IR] DESLIGAR`.
@@ -258,7 +258,7 @@ O Wokwi não tem as barreiras iPEC; no `diagram.json` os dois sensores de presen
 ```bash
 python hardware/logica/verificar_logica.py            # OK: ... conferidas
 python hardware/logica/verificar_logica.py --markdown # tabelas desta página
-python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta e 12 passos do IR
+python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta e 22 passos do IR
 ```
 
 `verificar_logica.py` confere:
@@ -271,7 +271,7 @@ python hardware/logica/testar_firmware.py             # OK: 13 cenarios da porta
 
 `testar_firmware.py` extrai `passoPorta()` e `filtrarBarreira()` do próprio `sketch.ino`, compila com `hardware/logica/teste_porta.cpp` (com `-Wall -Wextra -Werror`) e roda as mesmas sequências chamando a lógica a cada 10 ms, como o `loop()`. Cada sequência roda sem ruído e com o contato oscilando duas vezes antes de assentar (13 cenários). O único caso excluído com ruído é o dos dois feixes cortados ao mesmo tempo, que não tem ordem definida.
 
-O mesmo script extrai `podeResfriar()`, `acDeveFicarLigado()` e `proximoComandoIR()` e confere, com `hardware/logica/teste_ir.cpp`, os pulsos de 12 passos: ligar na primeira entrada, subir e baixar 1 °C por pulso, desligar quando a sala esvazia ou com `AC_OFF` e não mexer no alvo com o aparelho desligado. Os dois scripts rodam no job `firmware` da CI.
+O mesmo script extrai `podeResfriar()`, `acDeveFicarLigado()`, `estadoNovoParaEnviar()` e `proximoComandoIR()` e confere, com `hardware/logica/teste_ir.cpp`, 22 passos: nos pulsos simulados, ligar na primeira entrada, subir e baixar 1 °C por pulso, desligar quando a sala esvazia ou com `AC_OFF` e não mexer no alvo com o aparelho desligado; no protocolo real, um quadro só por mudança, com o estado inteiro. Os dois scripts rodam no job `firmware` da CI.
 
 ## 11. Prints
 

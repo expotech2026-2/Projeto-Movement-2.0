@@ -3,28 +3,36 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <Preferences.h>
 #include <esp_system.h>
 #include <time.h>
 #include "DHT.h"
+#include <IRremoteESP8266.h>
+#include <IRac.h>
+#include <IRutils.h>
 
 #if __has_include("config.h")
 #include "config.h"
-#else
+#endif
+#ifndef MOVEMENT_API_URL
 #define MOVEMENT_API_URL "http://192.168.0.10:8000/telemetry"
 #define MOVEMENT_DEVICE_TOKEN "PREENCHA_LOCALMENTE"
 #define MOVEMENT_CA_CERT ""
 #endif
+#ifndef MOVEMENT_WIFI_SSID
+#define MOVEMENT_WIFI_SSID     "Wokwi-GUEST"   // a montagem real define a rede no config.h
+#define MOVEMENT_WIFI_PASSWORD ""
+#endif
+#ifndef MOVEMENT_AC_PROTOCOLO
+#define MOVEMENT_AC_PROTOCOLO ""   // vazio = pulsos simulados no LED (contexto/hardware.md)
+#endif
 
 String movementPendingPayload;
-
-// ── WiFi ───────────────────────────────────────────────────────────────────
-#define WIFI_SSID      "Wokwi-GUEST"
-#define WIFI_PASSWORD  ""
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
 const int pinBarreiraB = 26;   // barreira do lado de dentro; GPIO 12 é pino de partida (docs/fisica.md, 9.5)
-const int pinLED_IR   = 2;     // LED simula pulso IR enviado ao AC
+const int pinLED_IR   = 2;     // LED IR, pelo BC547, apontado para o ar-condicionado
 
 #define DHTPIN_EXTERNO 14
 #define DHTPIN_INTERNO 27
@@ -47,10 +55,7 @@ const float TEMP_CONFORTO_BASE      = 24.0;
 const float REDUCAO_POR_PESSOA      = 0.3;
 const float TEMP_AC_MIN             = 18.0;
 const float TEMP_AC_MAX             = 30.0;
-const float RESFRIAMENTO_POR_SEGUNDO = 0.05;
 const float TOLERANCIA_AC           = 0.5;
-float ultimaRawInterna = -1000.0;          // última leitura crua do DHT interno
-const float LIMIAR_SALTO_DHT = 2.5;  
 
 // ── Modo de operação ───────────────────────────────────────────────────────
 enum ModoAC { MODO_AUTOMATICO, MODO_MANUAL };
@@ -70,28 +75,25 @@ const unsigned long FILTRO_BARREIRA_MS = 30;   // o contato do relé oscila ao c
 int barreiraA = LOW, barreiraB = LOW;          // estado filtrado: HIGH = feixe interrompido
 int brutaA = LOW, brutaB = LOW;
 unsigned long desdeA = 0, desdeB = 0;
+QueueHandle_t filaPorta;                       // passagens (+1/-1) da tarefa da porta para o loop()
 
-float tempInternaAjustada = 0.0;
-bool  primeiraLeitura     = true;
+float tempInterna     = 0.0;         // última leitura válida do DHT da sala
+bool  primeiraLeitura = true;
 
 float tempExternaAtual = 25.0;
 float umidExternaAtual = 0.0;        // umidade relativa externa
 float umidInternaAtual = 0.0;        // umidade relativa interna
 float tempRecomendada  = TEMP_CONFORTO_BASE;
 float tempAlvoAC       = TEMP_CONFORTO_BASE;
-bool  acLigado         = false;
-bool  acForcadoOff     = false;      // AC_OFF manual: força o compressor desligado
+bool  acLigado         = false;      // estimativa de compressor resfriando (F)
+bool  acForcadoOff     = false;      // AC_OFF manual: força o aparelho desligado
 int   ultimoComandoAC  = -1;
 
 // ── Tempos ─────────────────────────────────────────────────────────────────
 unsigned long ultimaLeituraDHT   = 0;
-unsigned long ultimoCalculoCalor = 0;
-unsigned long ultimoResfriamento = 0;
 unsigned long ultimoEnvio         = 0;
 unsigned long ultimaConsultaPlano = 0;
 const unsigned long intervaloDHT      = 2000;
-const unsigned long intervaloCalor    = 10000;
-const unsigned long intervaloResfr    = 1000;
 unsigned long intervaloEnvio          = 16000; // ajustado pelo plano otimizado da API (15 a 300 s)
 const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cada 15 min
 
@@ -110,6 +112,22 @@ unsigned long proximoPulso = 0;
 bool ligadoEnviado = false;
 int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;
 
+// ── Protocolo real do ar-condicionado (IRremoteESP8266) ────────────────────
+IRac arCondicionado(pinLED_IR);
+decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = pulsos simulados
+bool forcarEnvioIR = false;                           // reenvia o estado atual uma vez
+unsigned long ultimoQuadroIR = 0;
+const unsigned long INTERVALO_MIN_IR = 1000;          // junta mudanças rápidas num só quadro
+Preferences preferencias;
+// Protocolos das marcas mais comuns no Brasil, na ordem do IR_TESTE (contexto/hardware.md).
+const decode_type_t PROTOCOLOS_TESTE[] = {
+  decode_type_t::LG2,          decode_type_t::LG,           decode_type_t::SAMSUNG_AC,
+  decode_type_t::MIDEA,        decode_type_t::COOLIX,       decode_type_t::GREE,
+  decode_type_t::KELVINATOR,   decode_type_t::TCL112AC,     decode_type_t::WHIRLPOOL_AC,
+  decode_type_t::DAIKIN,       decode_type_t::FUJITSU_AC,   decode_type_t::HITACHI_AC,
+  decode_type_t::ELECTRA_AC,   decode_type_t::CARRIER_AC64,
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
@@ -125,24 +143,30 @@ void setup() {
   dhtInterno.begin();
 
   Serial.println(F("\n=== SMART AC CONTROLLER (Auto + Manual) ==="));
+  // A porta roda numa tarefa própria no núcleo 0, então um envio HTTP lento não perde passagens.
+  filaPorta = xQueueCreate(16, sizeof(int));
+  xTaskCreatePinnedToCore(tarefaPorta, "porta", 4096, nullptr, 1, nullptr, 0);
+  carregarProtocoloIR();
   conectarWiFi();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   atualizarIntervalo();
   ultimaConsultaPlano = millis();
+  atualizarAutomatico();
   Serial.println(F("Sistema pronto. Modo inicial: AUTOMATICO\n"));
 }
 
 // ── WiFi ────────────────────────────────────────────────────────────────────
 void conectarWiFi() {
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  Serial.print(F("[WiFi] Conectando"));
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(MOVEMENT_WIFI_SSID, MOVEMENT_WIFI_PASSWORD);
+  Serial.printf("[WiFi] Conectando em %s", MOVEMENT_WIFI_SSID);
   int t = 0;
   while (WiFi.status() != WL_CONNECTED && t++ < 40) { delay(300); Serial.print("."); }
   if (WiFi.status() == WL_CONNECTED)
     Serial.println("\n[WiFi] IP: " + WiFi.localIP().toString());
   else
-    Serial.println(F("\n[WiFi] Sem conexao (modo offline)."));
+    Serial.println(F("\n[WiFi] Sem conexao; o ESP32 segue tentando sem parar a contagem."));
 }
 
 // ── Temperatura recomendada (modo automático) ──────────────────────────────
@@ -164,6 +188,16 @@ bool acDeveFicarLigado() {
   return !acForcadoOff && podeResfriar();
 }
 
+// Protocolo real: cada quadro leva o estado inteiro; devolve true quando há um estado novo a enviar.
+bool estadoNovoParaEnviar() {
+  bool ligar = acDeveFicarLigado();
+  int alvo = (int)tempAlvoAC;
+  if (ligar == ligadoEnviado && (!ligar || alvo == alvoEnviado)) return false;
+  ligadoEnviado = ligar;
+  alvoEnviado = alvo;
+  return true;
+}
+
 // Próximo pulso para o aparelho chegar ao estado desejado (0 = nenhum); ligar/desligar vem antes.
 unsigned long proximoComandoIR(const char*& nome) {
   bool ligar = acDeveFicarLigado();
@@ -180,7 +214,12 @@ unsigned long proximoComandoIR(const char*& nome) {
   return subir ? PULSO_SUBIR : PULSO_BAIXAR;
 }
 
-// ── Define um novo alvo; processarPulsosIR leva o aparelho até ele ─────────
+// F = A · not(C) · (M + B): estima se o compressor resfria; quem controla de fato é o aparelho.
+void atualizarResfriamento() {
+  acLigado = !primeiraLeitura && acDeveFicarLigado() && (tempInterna - tempAlvoAC > TOLERANCIA_AC);
+}
+
+// ── Define um novo alvo; processarComandosIR leva o aparelho até ele ───────
 void definirAlvoAC(float novoAlvo, const char* origem) {
   novoAlvo = constrain(novoAlvo, TEMP_AC_MIN, TEMP_AC_MAX);
   int alvoInt = (int)round(novoAlvo);
@@ -189,9 +228,7 @@ void definirAlvoAC(float novoAlvo, const char* origem) {
 
   ultimoComandoAC = alvoInt;
   tempAlvoAC      = alvoInt;
-
-  float desvio = tempInternaAjustada - tempAlvoAC;
-  acLigado = acDeveFicarLigado() && (desvio > TOLERANCIA_AC);
+  atualizarResfriamento();
 
   Serial.println(F("\n┌─── COMANDO AO AR-CONDICIONADO ───"));
   Serial.print(F("│ Origem:     ")); Serial.println(origem);
@@ -202,18 +239,21 @@ void definirAlvoAC(float novoAlvo, const char* origem) {
 
 // ── Atualiza alvo no modo automático ───────────────────────────────────────
 void atualizarAutomatico() {
-  if (modoAtual != MODO_AUTOMATICO || primeiraLeitura) return;
+  if (modoAtual != MODO_AUTOMATICO) return;
   tempRecomendada = calcularTempRecomendada(tempExternaAtual);
   definirAlvoAC(tempRecomendada, "AUTOMATICO");
 }
 
 // ── Comando manual digitado no monitor serial ──────────────────────────────
-// AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP- ou a temperatura alvo (18 a 30).
+// AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP-, a temperatura alvo (18 a 30), IR <protocolo> ou IR_TESTE.
 void processarComandoManual(String cmd) {
   cmd.trim();
   cmd.toUpperCase();
   if (cmd.isEmpty()) return;
   Serial.println("[Manual] Comando recebido: " + cmd);
+
+  if (cmd == "IR_TESTE") { testarProtocolosIR(); return; }
+  if (cmd.startsWith("IR ")) { definirProtocoloIR(cmd.substring(3), true); return; }
 
   if (cmd == "AUTO" || cmd == "AUTOMATICO" || cmd == "MANUAL_OFF") {
     modoAtual = MODO_AUTOMATICO;
@@ -234,16 +274,16 @@ void processarComandoManual(String cmd) {
   if (cmd == "AC_ON") {
     modoAtual = MODO_MANUAL; inicioModoManual = millis();
     acForcadoOff = false;
-    Serial.println(F("[CMD] AC_ON — resfriamento retomado"));
+    Serial.println(F("[CMD] AC_ON — aparelho ligado"));
     return;
   }
 
-  // Desliga o A/C (para de resfriar, mantém modo manual).
+  // Desliga o A/C (mantém modo manual).
   if (cmd == "AC_OFF") {
     modoAtual = MODO_MANUAL; inicioModoManual = millis();
     acForcadoOff = true;
     acLigado = false;
-    Serial.println(F("[CMD] AC_OFF — compressor desligado"));
+    Serial.println(F("[CMD] AC_OFF — aparelho desligado"));
     return;
   }
 
@@ -292,21 +332,7 @@ void verificarTimeoutManual() {
   }
 }
 
-// ── Passo de resfriamento gradual ──────────────────────────────────────────
-void passoAC() {
-  if (primeiraLeitura) return;
-  if (acForcadoOff) { acLigado = false; return; }   // AC_OFF manual ativo
-  float desvio = tempInternaAjustada - tempAlvoAC;
-  if (desvio > TOLERANCIA_AC && podeResfriar()) {
-    acLigado = true;
-    tempInternaAjustada -= RESFRIAMENTO_POR_SEGUNDO;
-    if (tempInternaAjustada < tempAlvoAC) tempInternaAjustada = tempAlvoAC;
-  } else {
-    acLigado = false;
-  }
-}
-
-// ── Calor acumulado pelas pessoas ──────────────────────────────────────────
+// ── Calor emitido pelas pessoas (docs/fisica.md, seção 8) ──────────────────
 float calcularDeltaTemperatura(unsigned long deltaMs) {
   if (totalPessoas == 0) return 0.0;
   float pot   = totalPessoas * WATTS_POR_PESSOA;
@@ -325,33 +351,27 @@ void lerClima() {
   if (!isnan(tExt)) tempExternaAtual = tExt;
   if (!isnan(hExt)) umidExternaAtual = hExt;
   if (!isnan(hInt)) umidInternaAtual = hInt;
-
   if (!isnan(tInt)) {
-    if (primeiraLeitura) {
-      // Ponto de partida = temperatura medida
-      tempInternaAjustada = tInt;
-      ultimaRawInterna    = tInt;
-      primeiraLeitura     = false;
-      atualizarAutomatico();
-    }
-    else if (fabs(tInt - ultimaRawInterna) > LIMIAR_SALTO_DHT) {
-      // Você mexeu no sensor -> novo cenário, a simulação adota o valor
-      Serial.printf("[SIM] Novo cenario no DHT interno: %.1f C\n", tInt);
-      tempInternaAjustada = tInt;
-    }
-    ultimaRawInterna = tInt;
-    // (sem ancoragem: o AC agora consegue resfriar ate o alvo)
+    tempInterna = tInt;
+    primeiraLeitura = false;
+  } else if (primeiraLeitura) {
+    Serial.println(F("[DHT] Sem leitura do sensor da sala (GPIO 27): confira o fio e o pull-up."));
   }
+  atualizarAutomatico();   // a temperatura externa também muda o alvo
+  atualizarResfriamento();
 
   Serial.println(F("\n+------- LEITURA / STATUS -------+"));
   Serial.printf("| Modo:        %s\n", modoAtual == MODO_AUTOMATICO ? "AUTOMATICO" : "MANUAL");
   Serial.printf("| Externa:     %.1f C\n", tempExternaAtual);
-  Serial.printf("| Interna sim: %.1f C\n", tempInternaAjustada);
+  if (primeiraLeitura) Serial.println(F("| Interna:     sem leitura"));
+  else Serial.printf("| Interna:     %.1f C\n", tempInterna);
   Serial.printf("| Umid in/ext: %.0f%% / %.0f%%\n", umidInternaAtual, umidExternaAtual);
   Serial.printf("| Recomendada: %.1f C\n", tempRecomendada);
-  Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "ALTERANDO" : "espera");
-  Serial.printf("| Aparelho:    %s em %d C (pelo IR)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado);
-  Serial.printf("| Pessoas:     %d  (%.0f W)\n", totalPessoas, totalPessoas * WATTS_POR_PESSOA);
+  Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "RESFRIANDO" : "espera");
+  Serial.printf("| Aparelho:    %s em %d C (%s)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado,
+                protocoloAC == decode_type_t::UNKNOWN ? "IR simulado" : typeToString(protocoloAC).c_str());
+  Serial.printf("| Pessoas:     %d  (%.0f W, +%.2f C/min estimado)\n", totalPessoas,
+                totalPessoas * WATTS_POR_PESSOA, calcularDeltaTemperatura(60000));
   Serial.println(F("+-------------------------------+"));
 }
 
@@ -379,7 +399,7 @@ bool abrirMovement(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure
 }
 
 void enviarMovement() {
-  if (WiFi.status() != WL_CONNECTED) { conectarWiFi(); return; }
+  if (WiFi.status() != WL_CONNECTED) { WiFi.reconnect(); return; }   // não bloqueia o loop
   if (primeiraLeitura || String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
   if (movementPendingPayload.isEmpty()) {
     time_t now = time(nullptr);
@@ -390,12 +410,12 @@ void enviarMovement() {
     strftime(measuredAt, sizeof(measuredAt), "%Y-%m-%dT%H:%M:%SZ", &utc);
     movementPendingPayload = "{\"message_id\":\"" + movementMessageId() + "\",\"measured_at\":\"" + String(measuredAt);
     movementPendingPayload += "\",\"occupancy\":" + String(totalPessoas);
-    movementPendingPayload += ",\"temp_inside\":" + String(tempInternaAjustada, 1);
+    movementPendingPayload += ",\"temp_inside\":" + String(tempInterna, 1);
     movementPendingPayload += ",\"temp_outside\":" + String(tempExternaAtual, 1);
     movementPendingPayload += ",\"target_temp\":" + String(tempAlvoAC, 1);
     movementPendingPayload += ",\"humidity_inside\":" + String(umidInternaAtual, 1);
     movementPendingPayload += ",\"humidity_outside\":" + String(umidExternaAtual, 1);
-    movementPendingPayload += String(",\"ac_on\":") + (acLigado ? "true" : "false");
+    movementPendingPayload += String(",\"ac_on\":") + (ligadoEnviado ? "true" : "false");
     movementPendingPayload += String(",\"manual_mode\":") + (modoAtual == MODO_MANUAL ? "true" : "false") + "}";
   }
   HTTPClient http;
@@ -439,7 +459,7 @@ void atualizarIntervalo() {
   http.end();
 }
 
-// ── Pulsos IR do LED ───────────────────────────────────────────────────────
+// ── Pulsos IR simulados no LED ─────────────────────────────────────────────
 void processarPulsosIR() {
   unsigned long agora = millis();
   if (pulsoAtivo) {
@@ -459,6 +479,87 @@ void processarPulsosIR() {
   inicioPulso = agora;
   Serial.printf("[IR] %s (%lu ms) -> aparelho %s em %d C\n", nome, duracaoPulso,
                 ligadoEnviado ? "ligado" : "desligado", alvoEnviado);
+}
+
+// ── Protocolo real do ar-condicionado ──────────────────────────────────────
+// Manda o estado inteiro (ligado em frio no alvo, ou desligado) no protocolo informado.
+bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo) {
+  arCondicionado.next.protocol = protocolo;
+  // LG e LG2 só diferem pelo modelo do controle (AKB75215403 = LG2); nos outros vale o primeiro.
+  arCondicionado.next.model    = protocolo == decode_type_t::LG2 ? 2 : 1;
+  arCondicionado.next.power    = ligado;
+  arCondicionado.next.mode     = stdAc::opmode_t::kCool;
+  arCondicionado.next.celsius  = true;
+  arCondicionado.next.degrees  = alvo;
+  arCondicionado.next.fanspeed = stdAc::fanspeed_t::kAuto;
+  return arCondicionado.sendAc();
+}
+
+// Escolhe o protocolo pelo nome (GREE, LG2, SAMSUNG_AC...) ou SIMULADO; salvar grava na flash.
+void definirProtocoloIR(String nome, bool salvar) {
+  nome.trim();
+  nome.toUpperCase();
+  decode_type_t protocolo = decode_type_t::UNKNOWN;
+  if (nome.length() > 0 && nome != "SIMULADO") {
+    protocolo = strToDecodeType(nome.c_str());
+    if (!IRac::isProtocolSupported(protocolo)) {
+      Serial.println("[IR] Protocolo de ar-condicionado desconhecido: " + nome);
+      return;
+    }
+  }
+  if (salvar) {
+    preferencias.begin("movement", false);
+    preferencias.putString("ir_protocolo", protocolo == decode_type_t::UNKNOWN ? "SIMULADO" : nome);
+    preferencias.end();
+  }
+  protocoloAC = protocolo;
+  pulsoAtivo = false;
+  digitalWrite(pinLED_IR, LOW);
+  forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;   // sincroniza o aparelho com o estado atual
+  Serial.printf("[IR] Protocolo: %s\n",
+                protocoloAC == decode_type_t::UNKNOWN ? "SIMULADO (pulsos no LED)" : nome.c_str());
+}
+
+// O protocolo gravado pelo comando IR vale mais que o do config.h.
+void carregarProtocoloIR() {
+  preferencias.begin("movement", false);
+  String nome = preferencias.getString("ir_protocolo", MOVEMENT_AC_PROTOCOLO);
+  preferencias.end();
+  definirProtocoloIR(nome, false);
+}
+
+// Liga e desliga o aparelho em cada protocolo da lista; qualquer tecla no serial interrompe.
+void testarProtocolosIR() {
+  Serial.println(F("[IR] Teste: aponte o LED para o aparelho e anote o protocolo que ele obedecer."));
+  for (decode_type_t protocolo : PROTOCOLOS_TESTE) {
+    Serial.printf("[IR] Testando %s: ligar em 22 C, frio\n", typeToString(protocolo).c_str());
+    enviarEstadoIR(protocolo, true, 22);
+    for (int i = 0; i < 50; i++) {
+      delay(100);
+      if (Serial.available()) {
+        Serial.readStringUntil('\n');
+        Serial.println(F("[IR] Teste interrompido."));
+        forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;
+        return;
+      }
+    }
+    enviarEstadoIR(protocolo, false, 22);
+    delay(1500);
+  }
+  Serial.println(F("[IR] Fim do teste. Grave o protocolo que funcionou com IR <nome>, ex.: IR GREE."));
+  forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;
+}
+
+// Sem protocolo, pisca os pulsos simulados; com protocolo, manda um quadro quando o estado muda.
+void processarComandosIR() {
+  if (protocoloAC == decode_type_t::UNKNOWN) { processarPulsosIR(); return; }
+  if (millis() - ultimoQuadroIR < INTERVALO_MIN_IR) return;
+  if (!estadoNovoParaEnviar() && !forcarEnvioIR) return;
+  forcarEnvioIR = false;
+  ultimoQuadroIR = millis();
+  bool enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado);
+  Serial.printf("[IR] %s: %s em %d C%s\n", typeToString(protocoloAC).c_str(),
+                ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado, enviado ? "" : " (falhou)");
 }
 
 // ── Evento de entrada/saída ────────────────────────────────────────────────
@@ -499,64 +600,66 @@ int passoPorta(bool a, bool b) {
   return 0;
 }
 
+// Lê as barreiras a cada 10 ms e manda cada passagem ao loop() pela fila.
+void tarefaPorta(void* parametro) {
+  for (;;) {
+    unsigned long agora = millis();
+    bool mudouA = filtrarBarreira(pinBarreiraA, barreiraA, brutaA, desdeA, agora);
+    bool mudouB = filtrarBarreira(pinBarreiraB, barreiraB, brutaB, desdeB, agora);
+    if (mudouA) Serial.printf("[BARREIRA] A %s\n", barreiraA == HIGH ? "cortada" : "livre");
+    if (mudouB) Serial.printf("[BARREIRA] B %s\n", barreiraB == HIGH ? "cortada" : "livre");
+    if (mudouA || mudouB) {
+      int evento = passoPorta(barreiraA == HIGH, barreiraB == HIGH);
+      if (evento != 0) xQueueSend(filaPorta, &evento, 0);
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 void loop() {
   unsigned long agora = millis();
 
-  // 1) Barreiras da porta: o sentido vem da ordem dos cortes
-  bool mudouA = filtrarBarreira(pinBarreiraA, barreiraA, brutaA, desdeA, agora);
-  bool mudouB = filtrarBarreira(pinBarreiraB, barreiraB, brutaB, desdeB, agora);
-  if (mudouA || mudouB) {
-    int evento = passoPorta(barreiraA == HIGH, barreiraB == HIGH);
+  // 1) Passagens contadas pela tarefa da porta
+  int evento;
+  while (xQueueReceive(filaPorta, &evento, 0) == pdTRUE) {
     if (evento > 0) {
       totalPessoas++; exibirTotal("ENTRADA (+1)");
-      atualizarAutomatico();   // só age se estiver em AUTOMATICO
-    } else if (evento < 0) {
-      if (totalPessoas > 0) { totalPessoas--; exibirTotal("SAIDA (-1)"); atualizarAutomatico(); }
-      else Serial.println(F("Aviso: sala vazia."));
+    } else if (totalPessoas > 0) {
+      totalPessoas--; exibirTotal("SAIDA (-1)");
+    } else {
+      Serial.println(F("Aviso: sala vazia."));
+      continue;
     }
+    atualizarAutomatico();   // só age se estiver em AUTOMATICO
   }
 
-  // 2) Calor das pessoas
-  if (agora - ultimoCalculoCalor >= intervaloCalor) {
-    unsigned long d = agora - ultimoCalculoCalor;
-    ultimoCalculoCalor = agora;
-    if (!primeiraLeitura && totalPessoas > 0)
-      tempInternaAjustada += calcularDeltaTemperatura(d);
-  }
-
-  // 3) Resfriamento gradual (vale para auto E manual)
-  if (agora - ultimoResfriamento >= intervaloResfr) {
-    ultimoResfriamento = agora;
-    passoAC();
-  }
-
-  // 4) Leitura DHT
+  // 2) Leitura DHT
   if (agora - ultimaLeituraDHT >= intervaloDHT) {
     ultimaLeituraDHT = agora;
     lerClima();
   }
 
-  // 5) Comando manual pelo monitor serial
+  // 3) Comando manual pelo monitor serial
   if (Serial.available()) processarComandoManual(Serial.readStringUntil('\n'));
 
-  // 6) Timeout do modo manual
+  // 4) Timeout do modo manual
   verificarTimeoutManual();
 
-  // 6b) Plano de leitura otimizado
+  // 5) Plano de leitura otimizado
   if (agora - ultimaConsultaPlano >= intervaloConsultaPlano) {
     ultimaConsultaPlano = agora;
     atualizarIntervalo();
   }
 
-  // 7) Envio da leitura para a API do Movement
+  // 6) Envio da leitura para a API do Movement
   if (agora - ultimoEnvio >= intervaloEnvio) {
     ultimoEnvio = agora;
     enviarMovement();
   }
 
-  // 8) Pulsos IR
-  processarPulsosIR();
+  // 7) Comando IR ao ar-condicionado
+  processarComandosIR();
 
   delay(10);
 }
