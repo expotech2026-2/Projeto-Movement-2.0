@@ -74,7 +74,6 @@ A documentação interativa fica em `/api/docs`. Principais grupos de rotas:
 | `/api/reports/pdf` | Relatórios |
 | `/api/rooms/{id}/sampling-plan`, `/api/devices/me/sampling-interval` | Plano de envio otimizado |
 | `/api/rooms/{id}/control`, `/api/devices/me/control` | Comando do professor e temperatura externa (Open-Meteo, com a OpenWeatherMap de reserva) |
-| `/api/cities` | Municípios do Brasil para as sugestões de cidade (API do IBGE) |
 
 ## Padrões de projeto
 

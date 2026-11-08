@@ -150,18 +150,24 @@ describe("API Movement", () => {
     );
   });
 
-  it("busca os municípios uma vez e reaproveita a lista", async () => {
+  it("busca os municípios direto no IBGE, sem a sessão, e reaproveita a lista", async () => {
+    storage.set("movement.operator.session", "valid-token");
+    const ibge = [
+      { "municipio-id": 3509502, "municipio-nome": "Campinas", "UF-sigla": "SP" },
+    ];
+    fetch
+      .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(ibge), { status: 200 }));
+    await expect(cities()).rejects.toThrow("HTTP 503");
     const list = [{ id: 3509502, name: "Campinas", state: "SP" }];
-    fetch.mockResolvedValueOnce(
-      new Response(JSON.stringify(list), { status: 200 }),
-    );
     await expect(cities()).resolves.toEqual(list);
     await expect(cities()).resolves.toEqual(list);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenLastCalledWith(
-      `${apiConfig.baseUrl}/cities`,
-      expect.objectContaining({ cache: "no-store" }),
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const [url, options] = fetch.mock.lastCall;
+    expect(url).toBe(
+      "https://servicodados.ibge.gov.br/api/v1/localidades/municipios?view=nivelado&orderBy=nome",
     );
+    expect(options.headers).toBeUndefined();
   });
 
   it("consulta o comando do ar-condicionado da sala", async () => {
