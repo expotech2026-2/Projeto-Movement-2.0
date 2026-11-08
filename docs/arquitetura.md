@@ -34,7 +34,7 @@ flowchart LR
   esp -- "Envia leituras, consulta o<br/>intervalo e o comando<br/>[HTTPS + token]" --> movement
   movement -- "Consulta o clima<br/>[HTTPS]" --> meteo
   movement -- "Se a Open-Meteo falhar<br/>[HTTPS + chave]" --> owm
-  movement -- "Lista as cidades<br/>[HTTPS]" --> ibge
+  movement -- "Lista as cidades,<br/>pelo navegador<br/>[HTTPS]" --> ibge
   esp -- "Código do fabricante<br/>[IR 38 kHz]" --> ac
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef system fill:#1168bd,stroke:#0b4884,color:#ffffff
@@ -63,7 +63,7 @@ flowchart LR
   esp -- "POST /api/telemetry<br/>GET /api/devices/me/sampling-interval<br/>GET /api/devices/me/control<br/>[HTTPS + token]" --> api
   api -- "Clima por cidade<br/>[HTTPS]" --> meteo
   api -- "Reserva do clima<br/>[HTTPS + chave]" --> owm
-  api -- "Municípios<br/>[HTTPS]" --> ibge
+  spa -- "Municípios, direto<br/>do navegador<br/>[HTTPS]" --> ibge
   api -- "Lê e grava<br/>[SQL com TLS]" --> db
   classDef person fill:#08427b,stroke:#052e56,color:#ffffff
   classDef container fill:#438dd5,stroke:#2e6295,color:#ffffff
@@ -75,6 +75,8 @@ flowchart LR
 ```
 
 O site e a API saem da mesma imagem (`Dockerfile`): `app.site:create_site` serve o build do React em `/` e a API em `/api`.
+
+A lista de municípios é a única chamada do site que não passa pela API: o IBGE recusa conexões de fora do Brasil, e o App Service fica nos EUA, então o navegador do usuário busca a lista direto.
 
 ## 4. C4 nível 3 — Componentes da API
 
@@ -93,7 +95,6 @@ flowchart LR
     events["events.py<br/>alertas (Observer)"]
     control["control.py<br/>comando do professor"]
     climate["climate.py<br/>clima externo (Open-Meteo<br/>e OpenWeatherMap)"]
-    cities["cities.py<br/>municípios (IBGE)"]
     deps["dependencies.py<br/>sessão, perfis, dispositivo, repositório"]
     auth["auth.py + security.py<br/>login, hash, sessão assinada"]
     repo["repository.py<br/>TelemetryRepository"]
@@ -103,9 +104,8 @@ flowchart LR
   end
   db[("PostgreSQL<br/>schema movement")]
   site --> main
-  main --> mgmt & users & catalog & reports & sampling & events & control & cities
+  main --> mgmt & users & catalog & reports & sampling & events & control
   main --> deps & repo & retention & climate
-  cities --> deps
   mgmt --> deps & retention & climate
   control --> deps & mgmt & climate
   users --> deps & auth

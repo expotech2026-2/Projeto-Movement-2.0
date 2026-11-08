@@ -94,8 +94,31 @@ export function catalog(path) {
   return catalogCache.get(path);
 }
 
+const IBGE_CITIES_URL =
+  "https://servicodados.ibge.gov.br/api/v1/localidades/municipios?view=nivelado&orderBy=nome";
+let citiesCache = null;
+
+// O IBGE recusa conexões de fora do Brasil e a API roda nos EUA, então o navegador busca direto.
 export function cities() {
-  return catalog("/cities");
+  citiesCache ??= fetch(IBGE_CITIES_URL, { signal: AbortSignal.timeout(15_000) })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`IBGE indisponível (HTTP ${response.status})`);
+      }
+      return response.json();
+    })
+    .then((list) =>
+      list.map((item) => ({
+        id: item["municipio-id"],
+        name: item["municipio-nome"],
+        state: item["UF-sigla"],
+      })),
+    )
+    .catch((error) => {
+      citiesCache = null;
+      throw error;
+    });
+  return citiesCache;
 }
 
 export function samplingPlan(roomId, budgetRatio = 0.5) {
