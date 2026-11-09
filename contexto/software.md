@@ -45,12 +45,12 @@ As tabelas ficam no schema `movement` (nunca escreva o schema no SQL; a conexão
 | `air_conditioners` | Aparelhos de cada sala |
 | `ac_catalog` | Catálogo do Inmetro, carregado pela migração a partir de `backend/app/data/` |
 | `users` | Administradores e professores cadastrados (hash da senha e versão da sessão) |
-| `devices` | ESP32 de cada sala (hash do token) |
+| `devices` | ESP32 de cada sala (hash do token, último contato e diagnóstico) |
 | `sensor_readings` | Leituras detalhadas, guardadas por 30 dias |
 | `monthly_summaries` | Médias mensais por sala, guardadas por 12 meses |
 | `alerts` | Alertas de conforto e umidade gerados a partir das leituras |
 
-Migrações em `backend/migrations/versions/`: de 0001 a 0005 (`0005_alerts` é a atual). As migrações já aplicadas não podem ser alteradas.
+Migrações em `backend/migrations/versions/`: de 0001 a 0007 (`0007_device_status` é a atual). As migrações já aplicadas não podem ser alteradas.
 
 Regras importantes:
 - A telemetria é **idempotente**: cada leitura tem um `message_id`, e o reenvio da mesma leitura não duplica dados.

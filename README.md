@@ -248,7 +248,7 @@ No pgAdmin, as tabelas ficam em `Servers > Movement > Databases > Movement > Sch
 | `air_conditioners` | Aparelhos de cada sala |
 | `ac_catalog` | Catálogo do Inmetro |
 | `users` | Administradores e professores cadastrados |
-| `devices` | ESP32 de cada sala (hash do token) |
+| `devices` | ESP32 de cada sala (hash do token, último contato e diagnóstico) |
 | `sensor_readings` | Leituras detalhadas dos últimos 30 dias |
 | `monthly_summaries` | Médias mensais por sala, por 12 meses |
 | `alerts` | Alertas de conforto e umidade |
@@ -334,6 +334,8 @@ No painel da sala, professores e administradores podem fixar uma temperatura (16
 No automático, o alvo parte de 24 °C, ajusta pela temperatura externa e desconta o aquecimento que as pessoas causam em 10 minutos, calculado pela diferença entre o corpo humano (36,5 °C) e o ar. O resultado fica entre 18 e 25 °C, a faixa da NR-17 (item 17.8.4.2) para ambientes climatizados. Os cálculos estão em [docs/fisica.md](docs/fisica.md#8-modelo-térmico-da-sala-e-alvo-do-ar-condicionado).
 
 **Temperatura externa:** vem da [Open-Meteo](https://open-meteo.com/) (dados CC BY 4.0) para a cidade cadastrada na unidade, sem chave nem custo. O backend guarda as coordenadas ao salvar a unidade e consulta o clima no máximo a cada 15 min por cidade. Se ela não responder, a API tenta a [OpenWeatherMap](https://openweathermap.org/) (plano grátis, com a chave em `MOVEMENT_OPENWEATHER_API_KEY`); se as duas falharem, repete o último valor obtido. O painel mostra a cidade e a fonte do número. O plano grátis da Climatempo atende uma cidade só, e as salas ficam em cidades diferentes do estado de São Paulo.
+
+**ESP32 online e diagnóstico:** toda chamada do ESP32 à API registra o último contato e o diagnóstico que ele manda em cabeçalhos: versão do código (`X-Movement-Firmware`), sinal Wi-Fi em dBm (`X-Movement-RSSI`), tempo ligado (`X-Movement-Uptime`), sensores com falha (`X-Movement-Sensors`) e estado do ar-condicionado (`X-Movement-AC`). Como ele busca o comando do site pelo menos a cada 1 min, o painel da sala o mostra online até 2,5 min sem contato, mesmo quando o plano de envio espaça as leituras para 5 min. O mesmo painel lista o diagnóstico para a manutenção, e `GET /api/rooms/{id}/devices` devolve esses campos com `online` e `seconds_since_contact`.
 
 **Sugestões de cidade:** ao digitar a cidade da unidade, o site sugere os municípios do Brasil, com os de SP primeiro. O navegador busca a lista direto na API de localidades do IBGE e a guarda enquanto a página estiver aberta; nada fica gravado no código nem no banco. A busca não passa pelo backend porque o IBGE recusa conexões de fora do Brasil, e o Azure da produção fica nos EUA. A cidade é salva como "Nome - UF", porque há nomes repetidos entre estados, e a UF restringe a busca na Open-Meteo. Sem o IBGE no ar, o campo aceita o nome digitado sem sugestões.
 
@@ -468,7 +470,7 @@ contexto/                                # panorama do projeto para IAs, sem seg
 backend/
     pyproject.toml  requirements.lock    # dependências e ruff
     .env.example                         # modelo comentado das variáveis MOVEMENT_*
-    alembic.ini  migrations/versions/    # migrações 0001 a 0005; as aplicadas não mudam
+    alembic.ini  migrations/versions/    # migrações 0001 a 0007; as aplicadas não mudam
     README.md                            # tabela completa das rotas da API
     app/
         main.py                          # create_app: rotas de saúde, login e telemetria; inclui os routers

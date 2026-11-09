@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { DeviceDiagnostics, StatusBadge } from "./components/DeviceDiagnostics";
 import { Icon } from "./components/Icon";
 import { ManagementForm } from "./components/ManagementForms";
 import { OperatorLogin } from "./components/OperatorLogin";
@@ -18,6 +19,7 @@ import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
 import { useRoomControl } from "./hooks/useRoomControl";
 import { useRoomFeed } from "./hooks/useRoomFeed";
 import { useTheme } from "./hooks/useTheme";
+import { deviceStatus } from "./services/deviceStatus";
 import { clearSession, getSessionToken, request } from "./services/movementApi";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
@@ -537,7 +539,7 @@ function RoomInventory({
           <h2>Conexão com o sensor</h2>
           <p>
             {feed.devices[0]
-              ? `Dispositivo vinculado: ${feed.devices[0].id}`
+              ? `Dispositivo vinculado: ${feed.devices[0].id} · ${deviceStatus(feed.devices[0]).label}`
               : isAdmin
                 ? "Vincule um ESP32 para receber as medições desta sala."
                 : "Nenhum sensor vinculado a esta sala."}
@@ -660,17 +662,13 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         <h2>
           {room?.name}
           <span className="unit-chip">{unit?.name}</span>
-          <span
-            className={`badge ${feed.latest?.is_stale || feed.error ? "warning" : "success"}`}
-          >
-            {feed.loading
-              ? "Carregando"
-              : feed.error
-                ? "Sem conexão"
-                : feed.latest?.is_stale
-                  ? "Sem leitura recente"
-                  : "Sensor atualizado"}
-          </span>
+          {feed.loading || feed.error ? (
+            <span className="badge warning">
+              {feed.loading ? "Carregando" : "Sem conexão com a API"}
+            </span>
+          ) : (
+            <StatusBadge device={feed.devices[0]} />
+          )}
         </h2>
         <span className="muted">
           {reading
@@ -695,6 +693,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         ))}
       </div>
       {room?.id && <RoomControl state={control} />}
+      <DeviceDiagnostics device={feed.devices[0]} />
       <section className="panel chart-panel">
         <div className="section-heading">
           <div>
