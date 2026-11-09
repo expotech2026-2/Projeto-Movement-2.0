@@ -1,16 +1,17 @@
 import secrets
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.climate import UF_BY_NAME, ClimateService, ClimateUnavailable, split_city
 from app.dependencies import Climate, Db, require_admin, require_user
+from app.device_status import is_online
 from app.models import DEFAULT_UNIT_ID, DEFAULT_UNIT_NAME, AirConditioner, Device, Room, Unit
 from app.retention import monthly_history
 from app.security import hash_device_token
@@ -68,6 +69,24 @@ class DeviceOutput(BaseModel):
     id: str
     room_id: str
     enabled: bool
+    last_seen_at: AwareDatetime | None = None
+    firmware: str | None = None
+    rssi: int | None = None
+    uptime_seconds: int | None = None
+    sensor_faults: str | None = None
+    ac_state: str | None = None
+
+    @computed_field
+    @property
+    def online(self) -> bool:
+        return is_online(self.last_seen_at, datetime.now(UTC))
+
+    @computed_field
+    @property
+    def seconds_since_contact(self) -> int | None:
+        if self.last_seen_at is None:
+            return None
+        return max(0, int((datetime.now(UTC) - self.last_seen_at).total_seconds()))
 
 
 class DeviceCredential(DeviceOutput):

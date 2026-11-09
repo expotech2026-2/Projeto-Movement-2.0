@@ -55,6 +55,7 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 - As barreiras são lidas a cada 10 ms numa tarefa própria, no núcleo 0. Um envio HTTP ou a reconexão do Wi-Fi não fazem perder passagens.
 - A temperatura interna enviada à API é a medida pelo DHT. A externa vem do site (Open-Meteo, pela cidade da unidade); sem cidade, do DHT externo, se houver.
 - A cada 15 s com a sala ocupada (1 min com ela vazia), o ESP32 busca em `GET /api/devices/me/control` o comando do professor e a temperatura externa. Cada comando tem uma versão e é aplicado uma vez; o monitor serial mostra `[SITE] Comando N do professor`.
+- Toda chamada à API leva, além do token, o diagnóstico em cabeçalhos `X-Movement-*`: versão do código (`VERSAO_FIRMWARE`), sinal Wi-Fi, tempo ligado, DHT sem resposta e estado do ar. O painel da sala mostra o ESP32 online até 2,5 min sem contato, com esses dados para a manutenção.
 - Sem protocolo IR configurado, o LED manda pulsos simulados: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga, com 200 ms de pausa. Com protocolo, manda o código do fabricante.
 
 O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 22 passos do IR (pulsos simulados e protocolo real) e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.

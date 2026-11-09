@@ -160,6 +160,13 @@ class Device(Base):
     room_id: Mapped[str] = mapped_column(ForeignKey("rooms.id"), unique=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Último contato e diagnóstico enviado pelo próprio ESP32 (app/device_status.py).
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    firmware: Mapped[str | None] = mapped_column(String(32))
+    rssi: Mapped[int | None] = mapped_column(Integer)
+    uptime_seconds: Mapped[int | None] = mapped_column(BigInteger)
+    sensor_faults: Mapped[str | None] = mapped_column(String(120))
+    ac_state: Mapped[str | None] = mapped_column(String(60))
 
 
 class SensorReading(Base):

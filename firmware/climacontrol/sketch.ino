@@ -28,6 +28,7 @@
 #endif
 
 String movementPendingPayload;
+const char* VERSAO_FIRMWARE = "2.1.0";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -83,6 +84,8 @@ QueueHandle_t filaPorta;                       // passagens (+1/-1) da tarefa da
 
 float tempInterna     = 0.0;         // última leitura válida do DHT da sala
 bool  primeiraLeitura = true;
+bool  falhaDhtInterno = false;       // última leitura sem resposta (diagnóstico)
+bool  falhaDhtExterno = false;
 
 float tempExternaAtual = 25.0;
 float umidExternaAtual = 0.0;        // umidade relativa externa
@@ -374,6 +377,8 @@ void lerClima() {
   float tInt = dhtInterno.readTemperature();
   float hExt = dhtExterno.readHumidity();
   float hInt = dhtInterno.readHumidity();
+  falhaDhtInterno = isnan(tInt) || isnan(hInt);
+  falhaDhtExterno = isnan(tExt) || isnan(hExt);
 
   // O sensor externo só vale quando o site não tem a temperatura da cidade.
   if (!isnan(tExt) && !externaDoSite) tempExternaAtual = tExt;
@@ -427,6 +432,21 @@ bool abrirMovement(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure
   return http.begin(plain, url);
 }
 
+// Token e diagnóstico em toda chamada: o site mostra online/offline, sinal, sensores e o ar.
+void cabecalhosMovement(HTTPClient& http) {
+  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  http.addHeader("X-Movement-Firmware", VERSAO_FIRMWARE);
+  http.addHeader("X-Movement-RSSI", String(WiFi.RSSI()));
+  http.addHeader("X-Movement-Uptime", String(millis() / 1000UL));
+  String falhas = "";
+  if (falhaDhtInterno) falhas = "DHT da sala (GPIO 27)";
+  if (falhaDhtExterno) falhas += String(falhas.isEmpty() ? "" : ", ") + "DHT externo (GPIO 14)";
+  http.addHeader("X-Movement-Sensors", falhas.isEmpty() ? "ok" : falhas);
+  String protocolo = protocoloAC == decode_type_t::UNKNOWN ? "IR simulado" : typeToString(protocoloAC);
+  String ar = ligadoEnviado ? "ligado " + String(alvoEnviado) + " C" : "desligado";
+  http.addHeader("X-Movement-AC", ar + ", " + protocolo);
+}
+
 void enviarMovement() {
   if (WiFi.status() != WL_CONNECTED) { WiFi.reconnect(); return; }   // não bloqueia o loop
   if (primeiraLeitura || String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
@@ -453,7 +473,7 @@ void enviarMovement() {
   if (!abrirMovement(http, plainClient, secureClient, MOVEMENT_API_URL)) return;
   http.setTimeout(5000);
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  cabecalhosMovement(http);
   unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
   Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
@@ -472,7 +492,7 @@ void atualizarIntervalo() {
   WiFiClientSecure secureClient;
   if (!abrirMovement(http, plainClient, secureClient, url)) return;
   http.setTimeout(5000);
-  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  cabecalhosMovement(http);
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
@@ -548,7 +568,7 @@ void consultarControle() {
   WiFiClientSecure secureClient;
   if (!abrirMovement(http, plainClient, secureClient, url)) return;
   http.setTimeout(5000);
-  http.addHeader("Authorization", "Bearer " + String(MOVEMENT_DEVICE_TOKEN));
+  cabecalhosMovement(http);
   int code = http.GET();
   if (code == 200) aplicarControle(http.getString());
   else Serial.printf("[SITE] comando indisponivel (HTTP %d)\n", code);

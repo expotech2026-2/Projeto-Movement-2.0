@@ -36,7 +36,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0006_room_control"
+SCHEMA_VERSION = "0007_device_status"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
