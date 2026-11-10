@@ -504,6 +504,8 @@ firmware/climacontrol/
     config.h.example                     # modelo do config.h privado (URL, token, CA, tipo do DHT)
     diagram.json  wokwi-project.txt      # circuito no Wokwi
 
+firmware/MovementESP32-oficial/          # o mesmo firmware, pronto para abrir no Arduino IDE (CI confere)
+
 hardware/logica/                         # verificação das equações e teste C++ da porta e dos comandos IR (CI)
 docs/                                    # física, eletrônica digital, arquitetura e pesquisa operacional
 database/                                # consultas SQL e importação de servidores no pgAdmin
