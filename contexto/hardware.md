@@ -59,7 +59,7 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 - O LED manda o código infravermelho do fabricante (IRremoteESP8266): cada quadro leva o estado inteiro (ligado em frio no alvo, ou desligado) e é repetido uma vez 2 s depois. Sem protocolo configurado, nada é enviado: o serial e o diagnóstico do site mostram "sem protocolo IR".
 - O botão **Ligar o ar / Desligar o ar** do site chega ao ESP32 como modo manual (ligado na temperatura escolhida) ou desligado, por 2 h.
 
-O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 12 passos dos quadros IR e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual na placa, descrito no PR.
+O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 12 passos dos quadros IR e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Os botões do site também são conferidos de ponta a ponta pelo mesmo arquivo, `hardware/logica/controle_site.json`: o backend (`test_site_buttons_reach_the_device_as_the_firmware_expects`) confere que cada clique gera exatamente aquela resposta em `GET /api/devices/me/control`, e o `teste_controle.cpp` dá essa resposta ao `campoJson()` e ao `aplicarControle()` do firmware e confere o quadro IR que sai. Mudanças no firmware precisam de teste manual na placa, descrito no PR.
 
 ## Comando IR ao ar-condicionado
 
