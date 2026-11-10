@@ -211,10 +211,12 @@ function Workspace({ user, onLogout }) {
       const payload = { ...values };
       delete payload.id;
       delete payload.room_id;
-      await request(`${base}/appliances${item ? `/${item.id}` : ""}`, {
+      const target = `/rooms/${encodeURIComponent(editing.roomId || roomId)}`;
+      await request(`${target}/appliances${item ? `/${item.id}` : ""}`, {
         method,
         body: JSON.stringify(payload),
       });
+      await refreshDirectory();
     }
     setRevision((value) => value + 1);
     setNotice("Cadastro salvo com sucesso.");
@@ -229,7 +231,7 @@ function Workspace({ user, onLogout }) {
         appliance: `${base}/appliances/${item.id}`,
       }[type];
       await request(path, { method: "DELETE" });
-      if (type !== "appliance") await refreshDirectory();
+      await refreshDirectory();
       setRevision((value) => value + 1);
       setNotice("Cadastro excluído.");
     } catch (error) {
@@ -424,6 +426,11 @@ function Workspace({ user, onLogout }) {
                 onSelect={(id) => {
                   setRoomId(id);
                   setCredential(null);
+                  window.requestAnimationFrame(() =>
+                    document
+                      .getElementById("room-inventory")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                  );
                 }}
                 onEdit={setEditing}
                 onRemove={remove}
@@ -436,8 +443,22 @@ function Workspace({ user, onLogout }) {
                   isAdmin={isAdmin}
                   busy={busy}
                   credential={credential}
-                  onAdd={() => setEditing({ type: "appliance" })}
-                  onEdit={(item) => setEditing({ type: "appliance", item })}
+                  onAdd={() =>
+                    setEditing({
+                      type: "appliance",
+                      roomId: room.id,
+                      roomName: room.name,
+                    })
+                  }
+                  onEdit={(item) =>
+                    setEditing({
+                      type: "appliance",
+                      item,
+                      roomId: room.id,
+                      roomName: room.name,
+                    })
+                  }
+                  onEditRoom={() => setEditing({ type: "room", item: room })}
                   onRemove={(item) => remove("appliance", item)}
                   onProvision={provision}
                   onDismissCredential={() => setCredential(null)}
@@ -484,7 +505,12 @@ function Workspace({ user, onLogout }) {
           editing={editing}
           units={units}
           onSave={save}
-          onClose={() => setEditing(null)}
+          onClose={() => setEditing((current) => current?.back ?? null)}
+          onNavigate={setEditing}
+          onChanged={() => {
+            refreshDirectory().catch((error) => setNotice(error.message));
+            setRevision((value) => value + 1);
+          }}
         />
       )}
     </div>
@@ -500,13 +526,14 @@ function RoomInventory({
   credential,
   onAdd,
   onEdit,
+  onEditRoom,
   onRemove,
   onProvision,
   onDismissCredential,
 }) {
   return (
     <>
-      <div className="section-heading inventory-heading">
+      <div className="section-heading inventory-heading" id="room-inventory">
         <div>
           <h2>
             Aparelhos · {room.name}
@@ -517,13 +544,18 @@ function RoomInventory({
           </p>
         </div>
         {isAdmin && (
-          <button
-            className="button secondary"
-            disabled={feed.loading}
-            onClick={onAdd}
-          >
-            ＋ Adicionar aparelho
-          </button>
+          <div className="unit-actions">
+            <button className="text-button" onClick={onEditRoom}>
+              Editar sala
+            </button>
+            <button
+              className="button secondary"
+              disabled={feed.loading}
+              onClick={onAdd}
+            >
+              ＋ Adicionar aparelho
+            </button>
+          </div>
         )}
       </div>
       <Appliances
