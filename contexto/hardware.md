@@ -7,7 +7,7 @@
 | ESP32 DevKit V1 | 1 | Lê os sensores, decide o resfriamento e envia as leituras por Wi-Fi |
 | Barreira infravermelha iPEC IR15 Mini | 2 | Detecta a passagem na **mesma porta**: A do lado de fora, B do lado de dentro |
 | DHT11 | 1 | Temperatura e umidade da sala |
-| LED infravermelho 940 nm | 1 | Manda ao ar-condicionado o código do fabricante (ou pulsos simulados) |
+| LED infravermelho 940 nm | 1 | Manda ao ar-condicionado o código infravermelho do fabricante |
 | Transistor NPN BC547 | 1 | Chave do LED (o pino do ESP32 não fornece a corrente do LED) |
 | Resistor 1 kΩ | 1 | Base do BC547 |
 | Resistor 68 Ω | 1 | Limita a corrente do LED a ~51 mA, a partir dos 5 V do pino VIN |
@@ -56,9 +56,10 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 - A temperatura interna enviada à API é a medida pelo DHT. A externa vem do site (Open-Meteo, pela cidade da unidade); sem cidade, do DHT externo, se houver.
 - A cada 15 s com a sala ocupada (1 min com ela vazia), o ESP32 busca em `GET /api/devices/me/control` o comando do professor e a temperatura externa. Cada comando tem uma versão e é aplicado uma vez; o monitor serial mostra `[SITE] Comando N do professor`.
 - Toda chamada à API leva, além do token, o diagnóstico em cabeçalhos `X-Movement-*`: versão do código (`VERSAO_FIRMWARE`), sinal Wi-Fi, tempo ligado, DHT sem resposta e estado do ar. O painel da sala mostra o ESP32 online até 2,5 min sem contato, com esses dados para a manutenção.
-- Sem protocolo IR configurado, o LED manda pulsos simulados: 100 ms baixa 1 °C, 300 ms sobe 1 °C, 800 ms liga e 1,5 s desliga, com 200 ms de pausa. Com protocolo, manda o código do fabricante.
+- O LED manda o código infravermelho do fabricante (IRremoteESP8266): cada quadro leva o estado inteiro (ligado em frio no alvo, ou desligado) e é repetido uma vez 2 s depois. Sem protocolo configurado, nada é enviado: o serial e o diagnóstico do site mostram "sem protocolo IR".
+- O botão **Ligar o ar / Desligar o ar** do site chega ao ESP32 como modo manual (ligado na temperatura escolhida) ou desligado, por 2 h.
 
-O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 22 passos do IR (pulsos simulados e protocolo real) e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual no Wokwi, descrito no PR.
+O CI não compila o firmware. Ele extrai do `sketch.ino` a lógica da porta e a escolha dos comandos IR e as testa em C++ com 13 cenários da porta, 12 passos dos quadros IR e 10 casos do conforto (corpo humano e NR-17) (`hardware/logica/testar_firmware.py`), além de verificar as equações (`hardware/logica/verificar_logica.py`). Mudanças no firmware precisam de teste manual na placa, descrito no PR.
 
 ## Comando IR ao ar-condicionado
 
@@ -67,7 +68,7 @@ O firmware usa a biblioteca **IRremoteESP8266** (v2.9.0 ou mais nova, pelo Libra
 Para escolher o protocolo:
 
 1. No `config.h`: `#define MOVEMENT_AC_PROTOCOLO "GREE"`.
-2. Ou no monitor serial: `IR GREE`. O nome fica gravado na flash e vale mais que o `config.h`. `IR SIMULADO` volta aos pulsos simulados.
+2. Ou no monitor serial: `IR GREE`. O nome fica gravado na flash e vale mais que o `config.h`.
 3. Sem saber o protocolo, aponte o LED para o aparelho e digite `IR_TESTE`. O ESP32 liga (22 °C, frio) e desliga o aparelho em cada protocolo da lista, um a cada 6,5 s, e mostra o nome antes de cada um. Grave com `IR <nome>` o que fez o aparelho responder. Qualquer tecla interrompe o teste.
 
 | Marca | Protocolo para começar |

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { acIsOn, missingIrProtocol, powerCommand } from "../services/acPower";
 
 const MODES = {
   auto: { label: "Automático", tone: "success" },
@@ -14,15 +15,15 @@ const hour = (value) =>
 
 function describe(control) {
   if (control.mode === "manual")
-    return `Fixado em ${control.target} °C por ${control.changed_by} até ${hour(control.expires_at)}. Depois volta ao automático.`;
+    return `Ligado em ${control.target} °C por ${control.changed_by} até ${hour(control.expires_at)}. Depois volta ao automático.`;
   if (control.mode === "off")
     return `Desligado por ${control.changed_by} até ${hour(control.expires_at)}. Depois volta ao automático.`;
-  return "O alvo segue a ocupação, o calor das pessoas e a temperatura externa, dentro da faixa da NR-17 (18 a 25 °C).";
+  return "O alvo segue a ocupação, o calor das pessoas e a temperatura externa, dentro da faixa da NR-17 (18 a 25 °C). Com a sala vazia, o ar fica desligado.";
 }
 
-export function RoomControl({ state }) {
+export function RoomControl({ state, device, reading }) {
   const { control, error, loading, send } = state;
-  const [target, setTarget] = useState("22");
+  const [target, setTarget] = useState("23");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
 
@@ -45,6 +46,8 @@ export function RoomControl({ state }) {
 
   const mode = control ? MODES[control.mode] : null;
   const message = failure || error;
+  const isOn = acIsOn(control, device, reading);
+  const targetValid = Number(target) >= 16 && Number(target) <= 30;
 
   return (
     <section className="panel chart-panel room-control">
@@ -55,9 +58,10 @@ export function RoomControl({ state }) {
             {mode && <span className={`badge ${mode.tone}`}>{mode.label}</span>}
           </h2>
           <p className="muted">
-            Professores e administradores podem fixar uma temperatura ou
-            desligar. O comando vale por 2 horas. O ESP32 o recebe em até 15
-            segundos com a sala ocupada, ou em até 1 minuto com ela vazia.
+            Professores e administradores podem ligar, desligar ou fixar uma
+            temperatura. O comando vale por 2 horas. O ESP32 o recebe em até 15
+            segundos com a sala ocupada, ou em até 1 minuto com ela vazia, e o
+            manda ao aparelho pelo infravermelho.
           </p>
         </div>
       </div>
@@ -65,6 +69,33 @@ export function RoomControl({ state }) {
         <p className="muted">Carregando o controle…</p>
       ) : (
         <>
+          <div className="power-row">
+            <button
+              type="button"
+              className={`power-button ${isOn ? "on" : "off"}`}
+              aria-pressed={isOn}
+              disabled={busy || (!isOn && !targetValid)}
+              onClick={() => run(powerCommand(isOn, Number(target)))}
+            >
+              <span className="power-dot" aria-hidden="true" />
+              {busy ? "Enviando…" : isOn ? "Desligar o ar" : "Ligar o ar"}
+            </button>
+            <span className="muted">
+              {isOn
+                ? "O ar está ligado."
+                : `O ar está desligado. Ligar fixa ${targetValid ? target : "—"} °C.`}
+              {device?.ac_state && !missingIrProtocol(device)
+                ? ` Último estado do ESP32: ${device.ac_state}.`
+                : ""}
+            </span>
+          </div>
+          {missingIrProtocol(device) && (
+            <p className="notice error" role="alert">
+              O ESP32 ainda não tem o protocolo infravermelho do aparelho, então
+              os comandos não chegam ao ar. No monitor serial, rode IR_TESTE e
+              grave o que funcionar com IR &lt;nome&gt;.
+            </p>
+          )}
           {control && <p className="control-status">{describe(control)}</p>}
           <div className="control-actions">
             <form className="control-manual" onSubmit={fix}>
@@ -84,13 +115,6 @@ export function RoomControl({ state }) {
                 Fixar temperatura
               </button>
             </form>
-            <button
-              className="button secondary"
-              disabled={busy || control?.mode === "off"}
-              onClick={() => run({ mode: "off" })}
-            >
-              Desligar
-            </button>
             <button
               className="button secondary"
               disabled={busy || control?.mode === "auto"}

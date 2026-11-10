@@ -1,4 +1,5 @@
-// Movement 2.0 — controle de climatização da sala (ESP32). Bibliotecas: libraries.txt.
+// Movement 2.0 — firmware oficial do ESP32: conta as pessoas, calcula o alvo e comanda o ar
+// pelo código infravermelho do fabricante (IRremoteESP8266). Bibliotecas: libraries.txt.
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -24,11 +25,11 @@
 #define MOVEMENT_WIFI_PASSWORD ""
 #endif
 #ifndef MOVEMENT_AC_PROTOCOLO
-#define MOVEMENT_AC_PROTOCOLO ""   // vazio = pulsos simulados no LED (contexto/hardware.md)
+#define MOVEMENT_AC_PROTOCOLO ""   // vazio = nada é enviado até gravar o protocolo (IR_TESTE)
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.1.0";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.2.0";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -109,27 +110,19 @@ unsigned long ultimaConsultaControle = 0;
 long versaoControle = -1;            // último comando do site já aplicado
 bool externaDoSite  = false;         // temperatura externa da Open-Meteo, pela cidade da unidade
 
-// ── Pulsos IR (LED) ────────────────────────────────────────────────────────
-// Um pulso por comando, e a duração diz qual é; o alvo muda 1 °C por pulso.
-const unsigned long PULSO_BAIXAR   = 100;
-const unsigned long PULSO_SUBIR    = 300;
-const unsigned long PULSO_LIGAR    = 800;
-const unsigned long PULSO_DESLIGAR = 1500;
-const unsigned long PAUSA_PULSO    = 200;
-bool          pulsoAtivo   = false;
-unsigned long inicioPulso  = 0;
-unsigned long duracaoPulso = 0;
-unsigned long proximoPulso = 0;
-// O que o aparelho já recebeu pelo LED; ele começa desligado em 24 °C.
+// ── Estado que o aparelho já recebeu pelo IR ───────────────────────────────
+// Cada quadro leva o estado inteiro (ligado, frio, alvo); o aparelho começa desligado em 24 °C.
 bool ligadoEnviado = false;
 int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;
 
-// ── Protocolo real do ar-condicionado (IRremoteESP8266) ────────────────────
+// ── Protocolo do ar-condicionado (IRremoteESP8266) ─────────────────────────
 IRac arCondicionado(pinLED_IR);
-decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = pulsos simulados
+decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = sem protocolo: nada é enviado
 bool forcarEnvioIR = false;                           // reenvia o estado atual uma vez
+bool repetirQuadroIR = false;                         // confirmação do último quadro
 unsigned long ultimoQuadroIR = 0;
 const unsigned long INTERVALO_MIN_IR = 1000;          // junta mudanças rápidas num só quadro
+const unsigned long REPETICAO_IR_MS  = 2000;          // repete o quadro, caso o aparelho não o pegue
 Preferences preferencias;
 // Protocolos das marcas mais comuns no Brasil, na ordem do IR_TESTE (contexto/hardware.md).
 const decode_type_t PROTOCOLOS_TESTE[] = {
@@ -220,7 +213,7 @@ bool acDeveFicarLigado() {
   return !acForcadoOff && podeResfriar();
 }
 
-// Protocolo real: cada quadro leva o estado inteiro; devolve true quando há um estado novo a enviar.
+// Cada quadro IR leva o estado inteiro; devolve true quando há um estado novo a enviar.
 bool estadoNovoParaEnviar() {
   bool ligar = acDeveFicarLigado();
   int alvo = (int)tempAlvoAC;
@@ -228,22 +221,6 @@ bool estadoNovoParaEnviar() {
   ligadoEnviado = ligar;
   alvoEnviado = alvo;
   return true;
-}
-
-// Próximo pulso para o aparelho chegar ao estado desejado (0 = nenhum); ligar/desligar vem antes.
-unsigned long proximoComandoIR(const char*& nome) {
-  bool ligar = acDeveFicarLigado();
-  if (ligar != ligadoEnviado) {
-    ligadoEnviado = ligar;
-    nome = ligar ? "LIGAR" : "DESLIGAR";
-    return ligar ? PULSO_LIGAR : PULSO_DESLIGAR;
-  }
-  int alvo = (int)tempAlvoAC;
-  if (!ligadoEnviado || alvo == alvoEnviado) return 0;
-  bool subir = alvo > alvoEnviado;
-  alvoEnviado += subir ? 1 : -1;
-  nome = subir ? "SUBIR" : "BAIXAR";
-  return subir ? PULSO_SUBIR : PULSO_BAIXAR;
 }
 
 // F = A · not(C) · (M + B): estima se o compressor resfria; quem controla de fato é o aparelho.
@@ -402,7 +379,7 @@ void lerClima() {
   Serial.printf("| Recomendada: %.1f C\n", tempRecomendada);
   Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "RESFRIANDO" : "espera");
   Serial.printf("| Aparelho:    %s em %d C (%s)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado,
-                protocoloAC == decode_type_t::UNKNOWN ? "IR simulado" : typeToString(protocoloAC).c_str());
+                protocoloAC == decode_type_t::UNKNOWN ? "sem protocolo IR" : typeToString(protocoloAC).c_str());
   float tempSala = tempSalaParaCalculo();
   Serial.printf("| Pessoas:     %d  (%.0f W do corpo, +%.2f C/min)\n", totalPessoas,
                 totalPessoas * calorPorPessoa(tempSala), aquecimentoPessoas(totalPessoas, tempSala, 60));
@@ -442,9 +419,12 @@ void cabecalhosMovement(HTTPClient& http) {
   if (falhaDhtInterno) falhas = "DHT da sala (GPIO 27)";
   if (falhaDhtExterno) falhas += String(falhas.isEmpty() ? "" : ", ") + "DHT externo (GPIO 14)";
   http.addHeader("X-Movement-Sensors", falhas.isEmpty() ? "ok" : falhas);
-  String protocolo = protocoloAC == decode_type_t::UNKNOWN ? "IR simulado" : typeToString(protocoloAC);
+  if (protocoloAC == decode_type_t::UNKNOWN) {
+    http.addHeader("X-Movement-AC", "sem protocolo IR (rode IR_TESTE)");
+    return;
+  }
   String ar = ligadoEnviado ? "ligado " + String(alvoEnviado) + " C" : "desligado";
-  http.addHeader("X-Movement-AC", ar + ", " + protocolo);
+  http.addHeader("X-Movement-AC", ar + ", " + typeToString(protocoloAC));
 }
 
 void enviarMovement() {
@@ -575,29 +555,7 @@ void consultarControle() {
   http.end();
 }
 
-// ── Pulsos IR simulados no LED ─────────────────────────────────────────────
-void processarPulsosIR() {
-  unsigned long agora = millis();
-  if (pulsoAtivo) {
-    if (agora - inicioPulso >= duracaoPulso) {
-      digitalWrite(pinLED_IR, LOW);
-      pulsoAtivo = false;
-      proximoPulso = agora + PAUSA_PULSO;
-    }
-    return;
-  }
-  if (agora < proximoPulso) return;
-  const char* nome = "";
-  duracaoPulso = proximoComandoIR(nome);
-  if (duracaoPulso == 0) return;
-  digitalWrite(pinLED_IR, HIGH);
-  pulsoAtivo = true;
-  inicioPulso = agora;
-  Serial.printf("[IR] %s (%lu ms) -> aparelho %s em %d C\n", nome, duracaoPulso,
-                ligadoEnviado ? "ligado" : "desligado", alvoEnviado);
-}
-
-// ── Protocolo real do ar-condicionado ──────────────────────────────────────
+// ── Comando infravermelho ao ar-condicionado ───────────────────────────────
 // Manda o estado inteiro (ligado em frio no alvo, ou desligado) no protocolo informado.
 bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo) {
   arCondicionado.next.protocol = protocolo;
@@ -611,29 +569,28 @@ bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo) {
   return arCondicionado.sendAc();
 }
 
-// Escolhe o protocolo pelo nome (GREE, LG2, SAMSUNG_AC...) ou SIMULADO; salvar grava na flash.
+// Escolhe o protocolo pelo nome (GREE, LG2, SAMSUNG_AC...); salvar grava na flash.
 void definirProtocoloIR(String nome, bool salvar) {
   nome.trim();
   nome.toUpperCase();
-  decode_type_t protocolo = decode_type_t::UNKNOWN;
-  if (nome.length() > 0 && nome != "SIMULADO") {
-    protocolo = strToDecodeType(nome.c_str());
-    if (!IRac::isProtocolSupported(protocolo)) {
-      Serial.println("[IR] Protocolo de ar-condicionado desconhecido: " + nome);
-      return;
-    }
+  if (nome.isEmpty() || nome == "SIMULADO") {   // SIMULADO: valor gravado por firmwares antigos
+    protocoloAC = decode_type_t::UNKNOWN;
+    Serial.println(F("[IR] Sem protocolo do aparelho: rode IR_TESTE e grave o que funcionar com IR <nome>."));
+    return;
+  }
+  decode_type_t protocolo = strToDecodeType(nome.c_str());
+  if (!IRac::isProtocolSupported(protocolo)) {
+    Serial.println("[IR] Protocolo de ar-condicionado desconhecido: " + nome);
+    return;
   }
   if (salvar) {
     preferencias.begin("movement", false);
-    preferencias.putString("ir_protocolo", protocolo == decode_type_t::UNKNOWN ? "SIMULADO" : nome);
+    preferencias.putString("ir_protocolo", nome);
     preferencias.end();
   }
   protocoloAC = protocolo;
-  pulsoAtivo = false;
-  digitalWrite(pinLED_IR, LOW);
-  forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;   // sincroniza o aparelho com o estado atual
-  Serial.printf("[IR] Protocolo: %s\n",
-                protocoloAC == decode_type_t::UNKNOWN ? "SIMULADO (pulsos no LED)" : nome.c_str());
+  forcarEnvioIR = true;   // sincroniza o aparelho com o estado atual
+  Serial.printf("[IR] Protocolo: %s\n", nome.c_str());
 }
 
 // O protocolo gravado pelo comando IR vale mais que o do config.h.
@@ -666,16 +623,25 @@ void testarProtocolosIR() {
   forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;
 }
 
-// Sem protocolo, pisca os pulsos simulados; com protocolo, manda um quadro quando o estado muda.
+// Manda um quadro quando o estado muda e o repete uma vez 2 s depois; sem protocolo, só avisa.
 void processarComandosIR() {
-  if (protocoloAC == decode_type_t::UNKNOWN) { processarPulsosIR(); return; }
-  if (millis() - ultimoQuadroIR < INTERVALO_MIN_IR) return;
-  if (!estadoNovoParaEnviar() && !forcarEnvioIR) return;
+  unsigned long agora = millis();
+  if (agora - ultimoQuadroIR < INTERVALO_MIN_IR) return;
+  if (protocoloAC == decode_type_t::UNKNOWN) {
+    if (estadoNovoParaEnviar())
+      Serial.println(F("[IR] Sem protocolo do aparelho: nada enviado (rode IR_TESTE)."));
+    return;
+  }
+  bool novo = estadoNovoParaEnviar() || forcarEnvioIR;
+  bool repetir = !novo && repetirQuadroIR && agora - ultimoQuadroIR >= REPETICAO_IR_MS;
+  if (!novo && !repetir) return;
   forcarEnvioIR = false;
-  ultimoQuadroIR = millis();
+  repetirQuadroIR = novo;
+  ultimoQuadroIR = agora;
   bool enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado);
-  Serial.printf("[IR] %s: %s em %d C%s\n", typeToString(protocoloAC).c_str(),
-                ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado, enviado ? "" : " (falhou)");
+  Serial.printf("[IR] %s: %s em %d C%s%s\n", typeToString(protocoloAC).c_str(),
+                ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado, repetir ? " (repeticao)" : "",
+                enviado ? "" : " (falhou)");
 }
 
 // ── Evento de entrada/saída ────────────────────────────────────────────────

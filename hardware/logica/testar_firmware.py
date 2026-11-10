@@ -47,13 +47,11 @@ def main() -> int:
     }
     ir = {
         "ir_globais.inc": extract(
-            text, "// ── Pulsos IR (LED)", "int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;"
-        ),
-        "ir_funcoes.inc": extract(
             text,
-            "// Regra do circuito combinacional",
-            "  return subir ? PULSO_SUBIR : PULSO_BAIXAR;",
-        )
+            "// ── Estado que o aparelho já recebeu pelo IR",
+            "int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;",
+        ),
+        "ir_funcoes.inc": extract(text, "// Regra do circuito combinacional", "  return true;")
         + "}\n",
     }
     conforto = {

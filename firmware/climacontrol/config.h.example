@@ -6,6 +6,6 @@
 #define MOVEMENT_WIFI_PASSWORD "SENHA_DA_REDE"
 // Montagem real (docs/fisica.md, seção 9.4). Sem esta linha o firmware usa DHT22, o modelo do Wokwi.
 #define MOVEMENT_DHT_TYPE DHT11
-// Protocolo IR do ar-condicionado (contexto/hardware.md). Sem ele, o LED só pisca pulsos simulados.
+// Protocolo IR do ar-condicionado (contexto/hardware.md). Sem ele, nada é enviado ao aparelho.
 // O comando serial "IR <nome>" grava outro protocolo na flash e vale mais que este.
 // #define MOVEMENT_AC_PROTOCOLO "GREE"

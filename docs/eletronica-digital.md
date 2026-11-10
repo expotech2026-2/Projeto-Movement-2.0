@@ -271,7 +271,7 @@ python hardware/logica/testar_firmware.py             # OK: porta, comandos IR e
 
 `testar_firmware.py` extrai `passoPorta()` e `filtrarBarreira()` do próprio `sketch.ino`, compila com `hardware/logica/teste_porta.cpp` (com `-Wall -Wextra -Werror`) e roda as mesmas sequências chamando a lógica a cada 10 ms, como o `loop()`. Cada sequência roda sem ruído e com o contato oscilando duas vezes antes de assentar (13 cenários). O único caso excluído com ruído é o dos dois feixes cortados ao mesmo tempo, que não tem ordem definida.
 
-O mesmo script extrai `podeResfriar()`, `acDeveFicarLigado()`, `estadoNovoParaEnviar()` e `proximoComandoIR()` e confere, com `hardware/logica/teste_ir.cpp`, 22 passos: nos pulsos simulados, ligar na primeira entrada, subir e baixar 1 °C por pulso, desligar quando a sala esvazia ou com `AC_OFF` e não mexer no alvo com o aparelho desligado; no protocolo real, um quadro só por mudança, com o estado inteiro. Os dois scripts rodam no job `firmware` da CI.
+O mesmo script extrai `podeResfriar()`, `acDeveFicarLigado()` e `estadoNovoParaEnviar()` e confere, com `hardware/logica/teste_ir.cpp`, 12 passos dos quadros IR: ligar na primeira entrada, mandar o novo alvo, desligar quando a sala esvazia ou com o desligar do site, não mandar nada com o aparelho desligado e um quadro só por mudança, com o estado inteiro. Os dois scripts rodam no job `firmware` da CI.
 
 ## 11. Prints
 
