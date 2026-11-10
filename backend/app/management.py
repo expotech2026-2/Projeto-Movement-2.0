@@ -45,6 +45,7 @@ class RoomInput(BaseModel):
 class RoomOutput(RoomInput):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    appliance_count: int = 0
 
 
 class ApplianceInput(BaseModel):
@@ -214,10 +215,22 @@ def create_management_router() -> APIRouter:
 
     @router.get("/rooms", response_model=list[RoomOutput])
     def rooms(session: Db, unit_id: Annotated[str | None, Query(max_length=64)] = None):
-        query = select(Room).order_by(Room.name, Room.id)
+        counts = (
+            select(AirConditioner.room_id, func.count().label("appliances"))
+            .group_by(AirConditioner.room_id)
+            .subquery()
+        )
+        query = (
+            select(Room, func.coalesce(counts.c.appliances, 0))
+            .outerjoin(counts, counts.c.room_id == Room.id)
+            .order_by(Room.name, Room.id)
+        )
         if unit_id:
             query = query.where(Room.unit_id == unit_id)
-        return session.scalars(query).all()
+        return [
+            RoomOutput.model_validate(room).model_copy(update={"appliance_count": count})
+            for room, count in session.execute(query)
+        ]
 
     def require_unit(session: Session, unit_id: str):
         if session.get(Unit, unit_id) is None:

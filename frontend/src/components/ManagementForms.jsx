@@ -7,8 +7,10 @@ import {
   CATALOG_KINDS,
   ROLES,
 } from "../config/catalog";
-import { catalog, cities } from "../services/movementApi";
+import { findBrand, matchBrands, matchModels } from "../services/catalogMatch";
+import { catalog, cities, request } from "../services/movementApi";
 import { CityInput } from "./CityInput";
+import { SuggestInput } from "./SuggestInput";
 
 const TITLES = {
   unit: "unidade",
@@ -16,10 +18,10 @@ const TITLES = {
   appliance: "aparelho",
   user: "usuário",
 };
-const OTHER = "__outro__";
 const number = (value) => Number(value).toLocaleString("pt-BR");
 
 function initialValues(editing, units) {
+  if (editing.draft) return editing.draft;
   const item = editing.item;
   if (editing.type === "unit")
     return {
@@ -54,7 +56,14 @@ function initialValues(editing, units) {
   };
 }
 
-export function ManagementForm({ editing, units = [], onSave, onClose }) {
+export function ManagementForm({
+  editing,
+  units = [],
+  onSave,
+  onClose,
+  onNavigate,
+  onChanged,
+}) {
   const [values, setValues] = useState(() => initialValues(editing, units));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -90,6 +99,9 @@ export function ManagementForm({ editing, units = [], onSave, onClose }) {
         <div className="section-heading">
           <h2 id="form-title">
             {editing.item ? "Editar" : "Cadastrar"} {TITLES[editing.type]}
+            {editing.roomName && (
+              <span className="unit-chip">{editing.roomName}</span>
+            )}
           </h2>
           <button
             className="icon-button"
@@ -107,6 +119,22 @@ export function ManagementForm({ editing, units = [], onSave, onClose }) {
             editing={editing}
             units={units}
           />
+          {editing.type === "room" && editing.item && (
+            <RoomAppliances
+              room={editing.item}
+              disabled={busy}
+              onOpen={(appliance) =>
+                onNavigate({
+                  type: "appliance",
+                  item: appliance,
+                  roomId: editing.item.id,
+                  roomName: editing.item.name,
+                  back: { ...editing, draft: values },
+                })
+              }
+              onChanged={onChanged}
+            />
+          )}
           {error && (
             <p role="alert" className="notice error">
               {error}
@@ -122,7 +150,11 @@ export function ManagementForm({ editing, units = [], onSave, onClose }) {
               Cancelar
             </button>
             <button className="button primary" disabled={busy}>
-              {busy ? "Salvando…" : "Salvar cadastro"}
+              {busy
+                ? "Salvando…"
+                : editing.type === "room" && editing.item
+                  ? "Salvar sala"
+                  : "Salvar cadastro"}
             </button>
           </div>
         </form>
@@ -239,12 +271,99 @@ function RoomFields({ values, update, units }) {
   );
 }
 
+// Aparelhos da sala dentro do formulário dela: abrir um guarda o que já foi digitado na sala.
+function RoomAppliances({ room, disabled, onOpen, onChanged }) {
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState("");
+  const [removing, setRemoving] = useState(false);
+  const path = `/rooms/${encodeURIComponent(room.id)}/appliances`;
+  useEffect(() => {
+    let active = true;
+    request(path)
+      .then((list) => active && setItems(list))
+      .catch((failure) => active && setError(failure.message));
+    return () => {
+      active = false;
+    };
+  }, [path]);
+  async function remove(item) {
+    if (!window.confirm(`Excluir ${item.name}? O aparelho será removido do inventário.`))
+      return;
+    setRemoving(true);
+    setError("");
+    try {
+      await request(`${path}/${item.id}`, { method: "DELETE" });
+      setItems((list) => list.filter((entry) => entry.id !== item.id));
+      onChanged?.();
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setRemoving(false);
+    }
+  }
+  return (
+    <fieldset className="room-appliances">
+      <legend>
+        Aparelhos desta sala
+        {items && <span className="count">{items.length}</span>}
+      </legend>
+      {items === null && !error && <p className="muted">Carregando aparelhos…</p>}
+      {items?.length === 0 && (
+        <p className="muted">Nenhum aparelho cadastrado nesta sala.</p>
+      )}
+      {items?.map((item) => (
+        <div className="room-appliance" key={item.id}>
+          <div>
+            <strong>{item.name}</strong>
+            <small>
+              {[item.brand, item.model].filter(Boolean).join(" · ") ||
+                "Marca e modelo não informados"}{" "}
+              · {AC_KINDS[item.kind]} · {number(item.capacity_btu)} BTU/h
+            </small>
+          </div>
+          <span
+            className={`badge ${item.status === "ativo" ? "success" : "warning"}`}
+          >
+            {AC_STATUS[item.status]}
+          </span>
+          <button
+            type="button"
+            className="text-button"
+            disabled={disabled || removing}
+            onClick={() => onOpen(item)}
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            className="text-button danger"
+            disabled={disabled || removing}
+            onClick={() => remove(item)}
+          >
+            Excluir
+          </button>
+        </div>
+      ))}
+      {error && (
+        <p role="alert" className="notice error">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        className="button secondary"
+        disabled={disabled || removing || items === null}
+        onClick={() => onOpen(null)}
+      >
+        ＋ Adicionar aparelho
+      </button>
+    </fieldset>
+  );
+}
+
 function ApplianceFields({ values, update }) {
   const [brands, setBrands] = useState(null);
   const [models, setModels] = useState({ key: "", items: [] });
-  const [customBrand, setCustomBrand] = useState(null);
-  const [customModel, setCustomModel] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
   const [catalogError, setCatalogError] = useState("");
   useEffect(() => {
     catalog("/catalog/brands")
@@ -254,13 +373,8 @@ function ApplianceFields({ values, update }) {
         setCatalogError(error.message);
       });
   }, []);
-  const catalogBrand = brands?.some(
-    (item) => item.brand === values.brand.toUpperCase(),
-  );
-  const brandIsCustom =
-    customBrand ?? (brands !== null && values.brand !== "" && !catalogBrand);
-  const usesCatalog = !brandIsCustom && catalogBrand;
-  const modelsKey = usesCatalog ? values.brand.toUpperCase() : "";
+  const catalogBrand = brands ? findBrand(brands, values.brand) : undefined;
+  const modelsKey = catalogBrand?.brand || "";
   useEffect(() => {
     if (!modelsKey) return;
     const params = new URLSearchParams({ brand: modelsKey, limit: "2000" });
@@ -273,45 +387,19 @@ function ApplianceFields({ values, update }) {
     };
   }, [modelsKey]);
   const options = models.key === modelsKey ? models.items : [];
-  const loadingModels = usesCatalog && models.key !== modelsKey;
-  const matchId = options.find(
+  const loadingModels = Boolean(modelsKey) && models.key !== modelsKey;
+  const chosen = options.find(
     (item) => item.model === values.model && item.kind === values.kind,
-  )?.id;
-  const modelIsCustom =
-    customModel ??
-    (!loadingModels && values.model !== "" && matchId === undefined);
-  const chosen = options.find((item) => item.id === (selectedId ?? matchId));
-  function chooseBrand(value) {
-    setCustomModel(null);
-    setSelectedId(null);
-    if (value === OTHER) {
-      setCustomBrand(true);
-      update({ brand: "", model: "" });
-    } else {
-      setCustomBrand(false);
-      update({ brand: value, model: "" });
-    }
-  }
-  function chooseModel(value) {
-    if (value === OTHER) {
-      setCustomModel(true);
-      setSelectedId(null);
-      update({ model: "" });
-      return;
-    }
-    const item = options.find((option) => String(option.id) === value);
-    setCustomModel(false);
-    setSelectedId(item?.id ?? null);
-    update(
-      item
-        ? {
-            model: item.model,
-            kind: item.kind,
-            capacity_btu: item.capacity_btu,
-            inverter: item.inverter,
-          }
-        : { model: "" },
-    );
+  );
+  const brandOptions = brands ? matchBrands(brands, values.brand) : [];
+  const modelOptions = matchModels(options, values.model);
+  function chooseModel(item) {
+    update({
+      model: item.model,
+      kind: item.kind,
+      capacity_btu: item.capacity_btu,
+      inverter: item.inverter,
+    });
   }
   return (
     <>
@@ -331,11 +419,7 @@ function ApplianceFields({ values, update }) {
           Tipo
           <select
             value={values.kind}
-            onChange={(e) => {
-              setCustomModel(null);
-              setSelectedId(null);
-              update({ kind: e.target.value, model: "" });
-            }}
+            onChange={(e) => update({ kind: e.target.value })}
           >
             {Object.entries(AC_KINDS).map(([key, label]) => (
               <option key={key} value={key}>
@@ -361,75 +445,55 @@ function ApplianceFields({ values, update }) {
       <div className="form-grid">
         <label>
           Marca
-          {brands === null ? (
-            <select disabled>
-              <option>Carregando catálogo…</option>
-            </select>
-          ) : (
-            <select
-              value={brandIsCustom ? OTHER : values.brand.toUpperCase()}
-              onChange={(e) => chooseBrand(e.target.value)}
-            >
-              <option value="">Selecione a marca</option>
-              {brands.map((item) => (
-                <option key={item.brand} value={item.brand}>
-                  {item.brand}
-                </option>
-              ))}
-              <option value={OTHER}>Outra marca (digitar)</option>
-            </select>
-          )}
-          {brandIsCustom && (
-            <input
-              aria-label="Marca não listada"
-              maxLength={80}
-              placeholder="Digite a marca"
-              value={values.brand}
-              onChange={(e) => update({ brand: e.target.value })}
-            />
-          )}
+          <SuggestInput
+            label="Marca"
+            value={values.brand}
+            onChange={(brand) => update({ brand })}
+            options={brandOptions}
+            hidden={catalogBrand?.brand === values.brand}
+            onChoose={(item) =>
+              update({ brand: item.brand, model: "" })
+            }
+            describe={(item) => ({
+              key: item.brand,
+              label: item.brand,
+              detail: `${number(item.models)} modelos`,
+            })}
+            placeholder={
+              brands === null ? "Carregando catálogo…" : "Comece a digitar, ex.: LG"
+            }
+            emptyText="Marca fora do catálogo do Inmetro: pode digitar mesmo assim"
+          />
         </label>
         <label>
           Modelo
-          {usesCatalog && !modelIsCustom ? (
-            <select
-              value={chosen ? String(chosen.id) : ""}
-              disabled={loadingModels}
-              onChange={(e) => chooseModel(e.target.value)}
-            >
-              <option value="">
-                {loadingModels
-                  ? "Carregando modelos…"
-                  : `Selecione (${options.length} modelos)`}
-              </option>
-              {options.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.model} · {AC_KINDS[item.kind]} ·{" "}
-                  {number(item.capacity_btu)} BTU/h · {AC_FUNCTIONS[item.function]}
-                </option>
-              ))}
-              <option value={OTHER}>Outro modelo (digitar)</option>
-            </select>
-          ) : (
-            <input
-              maxLength={80}
-              placeholder={usesCatalog ? "Digite o modelo" : ""}
-              value={values.model}
-              onChange={(e) => update({ model: e.target.value })}
-            />
-          )}
-          {usesCatalog && modelIsCustom && (
-            <button
-              type="button"
-              className="text-button field-link"
-              onClick={() => {
-                setCustomModel(false);
-                update({ model: "" });
-              }}
-            >
-              Escolher do catálogo
-            </button>
-          )}
+          <SuggestInput
+            label="Modelo"
+            value={values.model}
+            onChange={(model) => update({ model })}
+            options={modelOptions}
+            hidden={Boolean(chosen)}
+            onChoose={chooseModel}
+            describe={(item) => ({
+              key: item.id,
+              label: item.model,
+              detail: `${AC_KINDS[item.kind]} · ${number(item.capacity_btu)} BTU/h · ${
+                item.inverter ? "inverter" : "convencional"
+              } · ${AC_FUNCTIONS[item.function]}`,
+            })}
+            placeholder={
+              loadingModels
+                ? "Carregando modelos…"
+                : modelsKey
+                  ? `Modelo, evaporadora ou BTU (${number(options.length)} no Inmetro)`
+                  : "Digite o modelo"
+            }
+            emptyText={
+              modelsKey && !loadingModels
+                ? `Nenhum modelo da ${modelsKey} com esse texto: pode digitar mesmo assim`
+                : ""
+            }
+          />
         </label>
       </div>
       {chosen && (
