@@ -1,5 +1,6 @@
 """Extrai do sketch.ino a porta, os comandos IR e o conforto, compila com os testes e os roda."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -10,6 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SKETCH = HERE.parents[1] / "firmware" / "climacontrol" / "sketch.ino"
 ARDUINO = HERE.parents[1] / "firmware" / "MovementESP32-oficial" / "MovementESP32-oficial.ino"
+SITE_BUTTONS = HERE / "controle_site.json"
 
 
 def extract(text: str, start: str, end: str) -> str:
@@ -18,6 +20,15 @@ def extract(text: str, start: str, end: str) -> str:
     first = next(i for i, line in enumerate(lines) if line.startswith(start))
     last = next(i for i in range(first, len(lines)) if lines[i] == end)
     return "\n".join(lines[first : last + 1]) + "\n"
+
+
+def button_cases() -> str:
+    """Casos de controle_site.json como literais C++ (json.dumps escapa como o C++ aceita)."""
+    cases = json.loads(SITE_BUTTONS.read_text(encoding="utf-8"))["casos"]
+    fields = ("botao", "resposta", "quadro")
+    return "".join(
+        "{" + ", ".join(json.dumps(case[field]) for field in fields) + "},\n" for case in cases
+    )
 
 
 def compiler() -> list[str]:
@@ -70,12 +81,33 @@ def main() -> int:
         )
         + "}\n",
     }
+    controle = {
+        **ir,
+        "alvo.inc": extract(
+            text,
+            "// ── Define um novo alvo",
+            '  Serial.println(F("└──────────────────────────────────"));',
+        )
+        + "}\n",
+        "manual.inc": extract(
+            text, "// Entra no modo manual pelo tempo indicado", "  duracaoManual = duracaoMs;"
+        )
+        + "}\n",
+        "controle.inc": extract(
+            text,
+            "// Valor de um campo do JSON plano da API",
+            '  else definirAlvoAC(campoJson(corpo, "target").toFloat(), "SITE (professor)");',
+        )
+        + "}\n",
+        "casos.inc": button_cases(),
+    }
     with tempfile.TemporaryDirectory() as tmp:
         build = Path(tmp)
         return (
             run_test(build, "teste_porta", porta)
             or run_test(build, "teste_ir", ir)
             or run_test(build, "teste_conforto", conforto)
+            or run_test(build, "teste_controle", controle)
         )
 
 

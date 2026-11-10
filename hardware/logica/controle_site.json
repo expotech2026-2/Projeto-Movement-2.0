@@ -1,0 +1,41 @@
+{
+  "descricao": "Cliques nos botões do site, na ordem, com a sala vazia. 'resposta' é o texto exato de GET /api/devices/me/control (backend/tests/test_control.py confere) e 'quadro' é o comando IR que o firmware manda depois de ler essa resposta (hardware/logica/teste_controle.cpp confere).",
+  "casos": [
+    {
+      "botao": "Ligar o ar (23 °C)",
+      "comando": {"mode": "manual", "target": 23},
+      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": "LIGADO 23"
+    },
+    {
+      "botao": "ESP32 consulta de novo, sem clique",
+      "comando": null,
+      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7185,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": ""
+    },
+    {
+      "botao": "Desligar o ar",
+      "comando": {"mode": "off"},
+      "resposta": "{\"version\":2,\"mode\":\"off\",\"target\":null,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": "DESLIGADO"
+    },
+    {
+      "botao": "Ligar o ar de novo (23 °C)",
+      "comando": {"mode": "manual", "target": 23},
+      "resposta": "{\"version\":3,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": "LIGADO 23"
+    },
+    {
+      "botao": "Fixar temperatura (20 °C)",
+      "comando": {"mode": "manual", "target": 20},
+      "resposta": "{\"version\":4,\"mode\":\"manual\",\"target\":20,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": "LIGADO 20"
+    },
+    {
+      "botao": "Voltar ao automático (sala vazia)",
+      "comando": {"mode": "auto"},
+      "resposta": "{\"version\":5,\"mode\":\"auto\",\"target\":null,\"remaining_seconds\":0,\"temp_outside\":null,\"humidity_outside\":null}",
+      "quadro": "DESLIGADO"
+    }
+  ]
+}
