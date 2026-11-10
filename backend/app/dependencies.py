@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import Principal, resolve_session
 from app.climate import ClimateService
+from app.device_status import record_contact
 from app.models import Device
 from app.repository import PostgresTelemetryRepository, TelemetryRepository
 from app.security import hash_device_token
@@ -49,7 +51,7 @@ def require_admin(principal: CurrentUser) -> Principal:
 AdminUser = Annotated[Principal, Depends(require_admin)]
 
 
-def require_device(session: Db, credentials: Credentials) -> Device:
+def require_device(request: Request, session: Db, credentials: Credentials) -> Device:
     device = None
     if credentials:
         device = session.scalar(
@@ -62,6 +64,8 @@ def require_device(session: Db, credentials: Credentials) -> Device:
         raise HTTPException(
             401, "Dispositivo não autorizado", headers={"WWW-Authenticate": "Bearer"}
         )
+    if record_contact(device, request, datetime.now(UTC)):
+        session.commit()
     return device
 
 
