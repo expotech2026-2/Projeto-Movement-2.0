@@ -692,7 +692,13 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           </article>
         ))}
       </div>
-      {room?.id && <RoomControl state={control} />}
+      {room?.id && (
+        <RoomControl
+          state={control}
+          device={feed.devices[0]}
+          reading={feed.latest?.reading}
+        />
+      )}
       <DeviceDiagnostics device={feed.devices[0]} />
       <section className="panel chart-panel">
         <div className="section-heading">

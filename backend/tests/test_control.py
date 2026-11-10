@@ -1,4 +1,7 @@
+import json
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -54,6 +57,26 @@ def test_professor_sets_manual_temperature_and_device_receives_it(context, clima
     assert (device["version"], device["mode"], device["target"]) == (1, "manual", 21)
     assert 7190 <= device["remaining_seconds"] <= 7200
     assert device["temp_outside"] is None
+
+
+SITE_BUTTONS = Path(__file__).parents[2] / "hardware" / "logica" / "controle_site.json"
+REMAINING = re.compile(r'"remaining_seconds":(\d+)')
+
+
+def test_site_buttons_reach_the_device_as_the_firmware_expects(context, climate):
+    """Cada clique do site vira, para o ESP32, o texto que teste_controle.cpp dá ao firmware."""
+    client = context["client"]
+    for case in json.loads(SITE_BUTTONS.read_text(encoding="utf-8"))["casos"]:
+        if case["comando"] is not None:
+            sent = client.put(
+                control_url(context), headers=context["professor_headers"], json=case["comando"]
+            )
+            assert sent.status_code == 200, case["botao"]
+        text = client.get("/devices/me/control", headers=context["device_headers"]).text
+        received = int(REMAINING.search(text).group(1))
+        expected = int(REMAINING.search(case["resposta"]).group(1))
+        assert abs(received - expected) <= 20, case["botao"]
+        assert REMAINING.sub("", text) == REMAINING.sub("", case["resposta"]), case["botao"]
 
 
 def test_off_and_back_to_auto_increment_the_version(context, climate):
