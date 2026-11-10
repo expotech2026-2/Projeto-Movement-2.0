@@ -1407,6 +1407,44 @@ td small {
   line-height: 1.6;
   margin-bottom: 16px;
 }
+.power-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.power-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.power-button.off {
+  color: var(--success-text);
+  background: var(--success-soft);
+}
+.power-button.on {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+.power-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.power-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .control-actions {
   display: flex;
   flex-wrap: wrap;

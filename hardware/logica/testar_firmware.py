@@ -9,6 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SKETCH = HERE.parents[1] / "firmware" / "climacontrol" / "sketch.ino"
+ARDUINO = HERE.parents[1] / "firmware" / "MovementESP32-oficial" / "MovementESP32-oficial.ino"
 
 
 def extract(text: str, start: str, end: str) -> str:
@@ -39,6 +40,10 @@ def run_test(build: Path, name: str, includes: dict[str, str]) -> int:
 
 def main() -> int:
     text = SKETCH.read_text(encoding="utf-8")
+    if ARDUINO.read_text(encoding="utf-8") != text:
+        print(f"FALHA: {ARDUINO.name} difere do sketch.ino; copie o sketch.ino para lá")
+        return 1
+    print("OK: a pasta do Arduino tem o mesmo firmware do sketch.ino")
     porta = {
         "porta_globais.inc": extract(
             text, "enum EstadoPorta", "unsigned long desdeA = 0, desdeB = 0;"
@@ -47,13 +52,11 @@ def main() -> int:
     }
     ir = {
         "ir_globais.inc": extract(
-            text, "// ── Pulsos IR (LED)", "int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;"
-        ),
-        "ir_funcoes.inc": extract(
             text,
-            "// Regra do circuito combinacional",
-            "  return subir ? PULSO_SUBIR : PULSO_BAIXAR;",
-        )
+            "// ── Estado que o aparelho já recebeu pelo IR",
+            "int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;",
+        ),
+        "ir_funcoes.inc": extract(text, "// Regra do circuito combinacional", "  return true;")
         + "}\n",
     }
     conforto = {
