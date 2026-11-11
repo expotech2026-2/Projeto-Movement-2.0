@@ -80,7 +80,7 @@ jobs:
   deploy-dev:
     name: Deploy movement-dev
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/Devlop' && vars.AZURE_CLIENT_ID != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/Devlop'
     runs-on: ubuntu-latest
     environment: movement-dev
     permissions:
