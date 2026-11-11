@@ -5,12 +5,14 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.climate import ClimateService
 from app.dependencies import Climate, CurrentDevice, CurrentUser, Db, require_user
 from app.management import get_room
-from app.models import Room, Unit
+from app.models import AirConditioner, Room, Unit
+from app.thermal import room_thermal
 
 MANUAL_DURATION = timedelta(hours=2)
 Mode = Literal["auto", "manual", "off"]
@@ -54,6 +56,12 @@ class DeviceControlOutput(BaseModel):
     remaining_seconds: int
     temp_outside: float | None
     humidity_outside: float | None
+    # O ESP32 calcula o alvo da sala e o ajuste do ar com a lotação e estes números da sala.
+    capacity: int
+    computers: int
+    ac_power_w: float
+    ua_w_k: float
+    fixed_heat_w: float
 
 
 def effective(room: Room, now: datetime) -> tuple[str, int | None, datetime | None]:
@@ -125,6 +133,12 @@ def create_control_router() -> APIRouter:
         now = datetime.now(UTC)
         mode, target, expires = effective(room, now)
         outside = outside_for(session, room, climate)
+        active_btu = session.scalar(
+            select(func.coalesce(func.sum(AirConditioner.capacity_btu), 0)).where(
+                AirConditioner.room_id == room.id, AirConditioner.status == "ativo"
+            )
+        )
+        thermal = room_thermal(room.area_m2, room.ceiling_height_m, room.capacity, active_btu)
         return DeviceControlOutput(
             version=room.ac_version,
             mode=mode,
@@ -132,6 +146,11 @@ def create_control_router() -> APIRouter:
             remaining_seconds=int((expires - now).total_seconds()) if expires else 0,
             temp_outside=outside.temperature if outside else None,
             humidity_outside=outside.humidity if outside else None,
+            capacity=room.capacity,
+            computers=room.computers,
+            ac_power_w=thermal.ac_power_w,
+            ua_w_k=thermal.ua_w_k,
+            fixed_heat_w=thermal.fixed_heat_w,
         )
 
     return router

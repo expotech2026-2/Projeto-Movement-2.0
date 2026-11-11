@@ -47,6 +47,9 @@ class Room(Base):
     name: Mapped[str] = mapped_column(String(120))
     location: Mapped[str] = mapped_column(String(120), default="", server_default="")
     capacity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    computers: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    area_m2: Mapped[float | None] = mapped_column(Float)
+    ceiling_height_m: Mapped[float] = mapped_column(Float, default=3.0, server_default="3")
     # Último comando do ar-condicionado dado pelo site; o ESP32 o busca pela versão.
     ac_mode: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto")
     ac_target: Mapped[int | None] = mapped_column(Integer)
@@ -55,6 +58,9 @@ class Room(Base):
     ac_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
         CheckConstraint("capacity BETWEEN 1 AND 10000", name="ck_room_capacity"),
+        CheckConstraint("computers BETWEEN 0 AND 10000", name="ck_room_computers"),
+        CheckConstraint("area_m2 IS NULL OR area_m2 BETWEEN 1 AND 100000", name="ck_room_area"),
+        CheckConstraint("ceiling_height_m BETWEEN 2 AND 20", name="ck_room_ceiling"),
         CheckConstraint("ac_mode IN ('auto', 'manual', 'off')", name="ck_room_ac_mode"),
         CheckConstraint(
             "ac_target IS NULL OR ac_target BETWEEN 16 AND 30", name="ck_room_ac_target"

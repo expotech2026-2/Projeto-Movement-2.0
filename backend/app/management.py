@@ -40,12 +40,30 @@ class RoomInput(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     location: str = Field(default="", max_length=120)
     capacity: int = Field(default=1, ge=1, le=10000, strict=True)
+    computers: int = Field(default=0, ge=0, le=10000, strict=True)
+    area_m2: float | None = Field(default=None, ge=1, le=100000, allow_inf_nan=False)
+    ceiling_height_m: float = Field(default=3.0, ge=2, le=20, allow_inf_nan=False)
+
+
+AREA_PER_PERSON_M2 = 1.5  # sala de aula, quando a área não é informada
+MIN_VOLUME_M3 = 20.0
+
+
+def room_volume(area_m2: float | None, ceiling_height_m: float, capacity: int) -> float:
+    """Volume de ar da sala para o cálculo do ESP32: área informada ou estimada pela capacidade."""
+    area = area_m2 or capacity * AREA_PER_PERSON_M2
+    return round(max(area * ceiling_height_m, MIN_VOLUME_M3), 1)
 
 
 class RoomOutput(RoomInput):
     model_config = ConfigDict(from_attributes=True)
     id: str
     appliance_count: int = 0
+
+    @computed_field
+    @property
+    def volume_m3(self) -> float:
+        return room_volume(self.area_m2, self.ceiling_height_m, self.capacity)
 
 
 class ApplianceInput(BaseModel):

@@ -29,7 +29,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.2.0";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.4.0";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -45,22 +45,30 @@ const int pinLED_IR   = 2;     // LED IR, pelo BC547, apontado para o ar-condici
 DHT dhtExterno(DHTPIN_EXTERNO, DHTTYPE);
 DHT dhtInterno(DHTPIN_INTERNO, DHTTYPE);
 
-// ── Parâmetros físicos da sala ─────────────────────────────────────────────
-const float VOLUME_SALA_M3      = 50.0;
-const float DENSIDADE_AR        = 1.2;
-const float CALOR_ESPECIFICO_AR = 1005.0;
-const float FATOR_RETENCAO      = 0.30;
-
-// ── Conforto / AC ──────────────────────────────────────────────────────────
-const float TEMP_CONFORTO_BASE      = 24.0;
-const float NR17_MIN                = 18.0;   // NR-17, 17.8.4.2: 18 a 25 °C em ambiente climatizado
-const float NR17_MAX                = 25.0;
+// ── Controle do ar: alvo da sala e ajuste do aparelho (docs/fisica.md, seção 8) ──
+const float TEMP_CONFORTO_BASE      = 24.0;   // estado do aparelho antes do primeiro cálculo
+const float ALVO_SALA_BASE          = 22.0;   // ajustado pelo dia lá fora, pela umidade e pela lotação
+const float ALVO_SALA_MIN           = 20.0;   // faixa da equipe, dentro da NR-17 (18 a 25 °C)
+const float ALVO_SALA_MAX           = 23.0;
 const float TEMP_CORPO              = 36.5;   // temperatura média do corpo humano
 const float CONDUTANCIA_PESSOA      = 5.6;    // W/K: 70 W de calor sensível a 24 °C, pessoa sentada
-const float HORIZONTE_PREVISAO_S    = 600.0;  // o alvo antecipa o calor dos próximos 10 min
-const float TEMP_AC_MIN             = 16.0;   // faixa do comando manual (professor)
+const float CALOR_COMPUTADOR        = 100.0;  // W: computador de mesa com monitor, em uso
+const float PROPORCAO_LABORATORIO   = 0.8;    // computadores >= 80% da capacidade: um por aluno
+const float LOTACAO_ALTA            = 0.75;   // 75% dos lugares: calor radiante dos vizinhos
+const float USO_ALTO                = 0.8;    // acima de 80% da potência, o ajuste desce 1 °C
+const float MARGEM_PARTIDA          = 1.0;    // sala 1 °C acima do alvo: partida forte
+const float MARGEM_CHEGADA          = 0.5;    // a partida para antes do alvo para não passar do ponto
+const int   AJUSTE_PARTIDA_MIN      = 18;
+const unsigned long LIMITE_PARTIDA_MS     = 30UL * 60UL * 1000UL;   // depois disso, falta potência
+const unsigned long INTERVALO_CORRECAO_MS = 5UL * 60UL * 1000UL;    // correção pelo DHT
+const float TEMP_AC_MIN             = 16.0;   // faixa do aparelho e do comando manual (professor)
 const float TEMP_AC_MAX             = 30.0;
 const float TOLERANCIA_AC           = 0.5;
+// Números da sala que o site manda (cadastro e aparelhos ativos); zero até a primeira resposta.
+float potenciaArSala = 0.0;   // W de calor sensível que os aparelhos ativos conseguem tirar
+float uaSala         = 0.0;   // W/K: paredes, janela e ar que entra pela porta
+float calorFixoSala  = 0.0;   // W: iluminação e sol
+enum FaseAr { FASE_MANUTENCAO, FASE_PARTIDA, FASE_SEM_POTENCIA };
 
 // ── Modo de operação ───────────────────────────────────────────────────────
 enum ModoAC { MODO_AUTOMATICO, MODO_MANUAL };
@@ -91,8 +99,13 @@ bool  falhaDhtExterno = false;
 float tempExternaAtual = 25.0;
 float umidExternaAtual = 0.0;        // umidade relativa externa
 float umidInternaAtual = 0.0;        // umidade relativa interna
-float tempRecomendada  = TEMP_CONFORTO_BASE;
-float tempAlvoAC       = TEMP_CONFORTO_BASE;
+float alvoSalaAtual    = ALVO_SALA_BASE;   // o que os alunos devem sentir
+float usoAr            = 0.0;              // carga para manter o alvo / potência dos aparelhos
+FaseAr faseAr          = FASE_MANUTENCAO;
+unsigned long inicioFase     = 0;
+unsigned long ultimaCorrecao = 0;
+int   correcaoAr       = 0;                // ajuste fino pelo DHT, em °C
+float tempAlvoAC       = TEMP_CONFORTO_BASE;   // ajuste mandado ao aparelho
 bool  acLigado         = false;      // estimativa de compressor resfriando (F)
 bool  acForcadoOff     = false;      // AC_OFF manual: força o aparelho desligado
 int   ultimoComandoAC  = -1;
@@ -109,9 +122,13 @@ const unsigned long intervaloConsultaPlano = 900000UL; // consulta o plano a cad
 unsigned long ultimaConsultaControle = 0;
 long versaoControle = -1;            // último comando do site já aplicado
 bool externaDoSite  = false;         // temperatura externa da Open-Meteo, pela cidade da unidade
+int capacidadeSala   = 1;            // cadastro da sala no site: pessoas e computadores
+int computadoresSala = 0;
 
 // ── Estado que o aparelho já recebeu pelo IR ───────────────────────────────
-// Cada quadro leva o estado inteiro (ligado, frio, alvo); o aparelho começa desligado em 24 °C.
+// Cada quadro leva o estado inteiro (ligado, frio, alvo, ventilação); começa desligado em 24 °C.
+bool ventilacaoForte = false;   // partida forte: ventilação no máximo e turbo
+bool forteEnviado  = false;
 bool ligadoEnviado = false;
 int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;
 
@@ -176,31 +193,61 @@ void conectarWiFi() {
     Serial.println(F("\n[WiFi] Sem conexao; o ESP32 segue tentando sem parar a contagem."));
 }
 
-// ── Temperatura recomendada (modo automático) ──────────────────────────────
+// ── Alvo da sala e ajuste do ar (modo automático) ──────────────────────────
 // Calor sensível de uma pessoa: proporcional à diferença entre o corpo e o ar.
 float calorPorPessoa(float tempSala) {
   return max(0.0f, CONDUTANCIA_PESSOA * (TEMP_CORPO - tempSala));
 }
 
-// Quanto as pessoas aquecem o ar em "segundos" (só a fração do calor que fica no ar).
-float aquecimentoPessoas(int pessoas, float tempSala, float segundos) {
-  float massa = VOLUME_SALA_M3 * DENSIDADE_AR;
-  return pessoas * calorPorPessoa(tempSala) * segundos * FATOR_RETENCAO /
-         (massa * CALOR_ESPECIFICO_AR);
+// Máquinas ligadas: uma a cada 2 alunos; num laboratório (computadores perto da capacidade), uma por aluno.
+int maquinasLigadas(int pessoas, int computadores, int capacidade) {
+  if (pessoas <= 0 || computadores <= 0) return 0;
+  bool laboratorio = computadores >= PROPORCAO_LABORATORIO * capacidade;
+  return min(laboratorio ? pessoas : pessoas / 2, computadores);
 }
 
-// Alvo: conforto pela temperatura externa menos o aquecimento previsto, dentro da NR-17.
-float calcularTempRecomendada(float tempExterna, float tempSala, int pessoas) {
-  float r = TEMP_CONFORTO_BASE;
-  if (tempExterna > 30.0)      r -= 1.0;
-  else if (tempExterna < 22.0) r += 1.5;
-  r -= aquecimentoPessoas(pessoas, tempSala, HORIZONTE_PREVISAO_S);
-  return constrain(r, NR17_MIN, NR17_MAX);
+// O que os alunos devem sentir: 22 °C ajustado pelo dia lá fora, pela umidade e pela lotação.
+float alvoSala(float tempExterna, float umidade, int pessoas, int maquinas, int capacidade) {
+  float alvo = ALVO_SALA_BASE;
+  if (tempExterna >= 30.0)      alvo += 0.5;   // menos choque térmico ao entrar e sair
+  else if (tempExterna <= 22.0) alvo += 1.0;
+  if (umidade > 70.0)                       alvo -= 1.0;   // ar úmido abafa
+  else if (umidade > 60.0)                  alvo -= 0.5;
+  else if (umidade > 0.0 && umidade < 40.0) alvo += 0.5;   // 0 = sem leitura
+  if (pessoas > 0 && pessoas >= LOTACAO_ALTA * capacidade)     alvo -= 0.5;
+  if (pessoas > 0 && maquinas >= PROPORCAO_LABORATORIO * pessoas) alvo -= 0.5;
+  return constrain(alvo, ALVO_SALA_MIN, ALVO_SALA_MAX);
 }
 
-// Temperatura da sala para o cálculo: a do DHT ou, antes da primeira leitura, a de conforto.
-float tempSalaParaCalculo() {
-  return primeiraLeitura ? TEMP_CONFORTO_BASE : tempInterna;
+// Calor que o ar precisa tirar para manter a sala no alvo (W): pessoas, máquinas, sala e paredes.
+float cargaTermica(int pessoas, int maquinas, float alvo, float tempExterna) {
+  return pessoas * calorPorPessoa(alvo) + maquinas * CALOR_COMPUTADOR + calorFixoSala +
+         uaSala * (tempExterna - alvo);
+}
+
+// Partida forte até perto do alvo, depois manutenção; 30 min sem chegar indica falta de potência.
+FaseAr proximaFase(FaseAr fase, float tempSala, float alvo, unsigned long tempoNaFase) {
+  bool chegou = tempSala <= alvo + MARGEM_CHEGADA;
+  if (fase == FASE_MANUTENCAO) return tempSala > alvo + MARGEM_PARTIDA ? FASE_PARTIDA : fase;
+  if (chegou) return FASE_MANUTENCAO;
+  if (fase == FASE_PARTIDA && tempoNaFase >= LIMITE_PARTIDA_MS) return FASE_SEM_POTENCIA;
+  return fase;
+}
+
+// Ajuste mandado ao aparelho: forte na partida, máximo sem potência e pelo uso na manutenção.
+int ajusteAr(FaseAr fase, float alvo, float uso, int correcao) {
+  int base = (int)floor(alvo);
+  if (fase == FASE_PARTIDA) return max(base - 4, AJUSTE_PARTIDA_MIN);
+  if (fase == FASE_SEM_POTENCIA || uso > 1.0) return base - 2;
+  int ajuste = uso > USO_ALTO ? base - 1 : base;
+  return constrain(ajuste + correcao, base - 2, base + 1);
+}
+
+// Correção pelo DHT a cada 5 min: sala acima do alvo baixa o ajuste 1 °C; abaixo, sobe.
+int corrigirAjuste(int correcao, float tempSala, float alvo) {
+  if (tempSala > alvo + MARGEM_CHEGADA) return max(correcao - 1, -2);
+  if (tempSala < alvo - MARGEM_CHEGADA) return min(correcao + 1, 1);
+  return correcao;
 }
 
 // Regra do circuito combinacional: F = A · not(C) · (M + B).
@@ -217,9 +264,12 @@ bool acDeveFicarLigado() {
 bool estadoNovoParaEnviar() {
   bool ligar = acDeveFicarLigado();
   int alvo = (int)tempAlvoAC;
-  if (ligar == ligadoEnviado && (!ligar || alvo == alvoEnviado)) return false;
+  bool forte = ligar && ventilacaoForte;
+  if (ligar == ligadoEnviado && (!ligar || (alvo == alvoEnviado && forte == forteEnviado)))
+    return false;
   ligadoEnviado = ligar;
   alvoEnviado = alvo;
+  forteEnviado = forte;
   return true;
 }
 
@@ -246,16 +296,43 @@ void definirAlvoAC(float novoAlvo, const char* origem) {
   Serial.println(F("└──────────────────────────────────"));
 }
 
-// ── Atualiza alvo no modo automático ───────────────────────────────────────
+const char* nomeFase(FaseAr fase) {
+  return fase == FASE_PARTIDA ? "partida forte" : fase == FASE_SEM_POTENCIA ? "sem potencia" : "manutencao";
+}
+
+// ── Modo automático: pessoas → máquinas → externa → umidade → alvo da sala → ajuste do ar ──
 void atualizarAutomatico() {
   if (modoAtual != MODO_AUTOMATICO) return;
-  tempRecomendada = calcularTempRecomendada(tempExternaAtual, tempSalaParaCalculo(), totalPessoas);
-  definirAlvoAC(tempRecomendada, "AUTOMATICO");
+  int maquinas = maquinasLigadas(totalPessoas, computadoresSala, capacidadeSala);
+  alvoSalaAtual = alvoSala(tempExternaAtual, umidInternaAtual, totalPessoas, maquinas, capacidadeSala);
+  float carga = cargaTermica(totalPessoas, maquinas, alvoSalaAtual, tempExternaAtual);
+  usoAr = potenciaArSala > 0 ? carga / potenciaArSala : 0.0;
+  unsigned long agora = millis();
+  if (totalPessoas == 0 || primeiraLeitura) {
+    faseAr = FASE_MANUTENCAO;   // sala vazia (ar desligado) ou sem DHT: nada a acompanhar
+    correcaoAr = 0;
+    inicioFase = ultimaCorrecao = agora;
+  } else {
+    FaseAr nova = proximaFase(faseAr, tempInterna, alvoSalaAtual, agora - inicioFase);
+    if (nova != faseAr) {
+      Serial.printf("[AR] %s -> %s (sala %.1f C, alvo %.1f C)\n", nomeFase(faseAr), nomeFase(nova),
+                    tempInterna, alvoSalaAtual);
+      faseAr = nova;
+      correcaoAr = 0;
+      inicioFase = ultimaCorrecao = agora;
+    } else if (faseAr == FASE_MANUTENCAO && agora - ultimaCorrecao >= INTERVALO_CORRECAO_MS) {
+      ultimaCorrecao = agora;
+      correcaoAr = corrigirAjuste(correcaoAr, tempInterna, alvoSalaAtual);
+    }
+  }
+  ventilacaoForte = faseAr != FASE_MANUTENCAO;
+  definirAlvoAC(ajusteAr(faseAr, alvoSalaAtual, usoAr, correcaoAr), "AUTOMATICO");
 }
 
 // Entra no modo manual pelo tempo indicado; depois volta sozinho ao automático.
 void entrarManual(unsigned long duracaoMs) {
   modoAtual = MODO_MANUAL;
+  ventilacaoForte = false;   // o professor escolhe o ajuste; a ventilação fica no automático
   inicioModoManual = millis();
   duracaoManual = duracaoMs;
 }
@@ -376,13 +453,17 @@ void lerClima() {
   if (primeiraLeitura) Serial.println(F("| Interna:     sem leitura"));
   else Serial.printf("| Interna:     %.1f C\n", tempInterna);
   Serial.printf("| Umid in/ext: %.0f%% / %.0f%%\n", umidInternaAtual, umidExternaAtual);
-  Serial.printf("| Recomendada: %.1f C\n", tempRecomendada);
-  Serial.printf("| Alvo AC:     %.1f C  (%s)\n", tempAlvoAC, acLigado ? "RESFRIANDO" : "espera");
-  Serial.printf("| Aparelho:    %s em %d C (%s)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado,
+  int maquinas = maquinasLigadas(totalPessoas, computadoresSala, capacidadeSala);
+  Serial.printf("| Pessoas:     %d  (%.0f W do corpo)\n", totalPessoas,
+                totalPessoas * calorPorPessoa(alvoSalaAtual));
+  Serial.printf("| Maquinas:    %d de %d ligadas  (%.0f W)\n", maquinas, computadoresSala,
+                maquinas * CALOR_COMPUTADOR);
+  Serial.printf("| Alvo sala:   %.1f C\n", alvoSalaAtual);
+  Serial.printf("| Uso do ar:   %.0f%% de %.0f W  (%s)\n", usoAr * 100, potenciaArSala, nomeFase(faseAr));
+  Serial.printf("| Ajuste ar:   %.0f C  (%s)\n", tempAlvoAC, acLigado ? "RESFRIANDO" : "espera");
+  Serial.printf("| Aparelho:    %s em %d C%s (%s)\n", ligadoEnviado ? "LIGADO" : "DESLIGADO", alvoEnviado,
+                forteEnviado ? ", ventilacao maxima" : "",
                 protocoloAC == decode_type_t::UNKNOWN ? "sem protocolo IR" : typeToString(protocoloAC).c_str());
-  float tempSala = tempSalaParaCalculo();
-  Serial.printf("| Pessoas:     %d  (%.0f W do corpo, +%.2f C/min)\n", totalPessoas,
-                totalPessoas * calorPorPessoa(tempSala), aquecimentoPessoas(totalPessoas, tempSala, 60));
   Serial.println(F("+-------------------------------+"));
 }
 
@@ -424,6 +505,8 @@ void cabecalhosMovement(HTTPClient& http) {
     return;
   }
   String ar = ligadoEnviado ? "ligado " + String(alvoEnviado) + " C" : "desligado";
+  if (ligadoEnviado && modoAtual == MODO_AUTOMATICO)
+    ar += String(", ") + nomeFase(faseAr) + ", sala " + String(alvoSalaAtual, 1) + " C";
   http.addHeader("X-Movement-AC", ar + ", " + typeToString(protocoloAC));
 }
 
@@ -515,6 +598,16 @@ void aplicarControle(const String& corpo) {
     String hExt = campoJson(corpo, "humidity_outside");
     if (hExt.length() > 0) umidExternaAtual = hExt.toFloat();
   }
+  String capacidade = campoJson(corpo, "capacity");
+  if (capacidade.length() > 0) capacidadeSala = capacidade.toInt();
+  String computadores = campoJson(corpo, "computers");
+  if (computadores.length() > 0) computadoresSala = computadores.toInt();
+  String potencia = campoJson(corpo, "ac_power_w");
+  if (potencia.length() > 0) potenciaArSala = potencia.toFloat();
+  String ua = campoJson(corpo, "ua_w_k");
+  if (ua.length() > 0) uaSala = ua.toFloat();
+  String fixo = campoJson(corpo, "fixed_heat_w");
+  if (fixo.length() > 0) calorFixoSala = fixo.toFloat();
   long versao = campoJson(corpo, "version").toInt();
   if (versao == versaoControle) return;
   versaoControle = versao;
@@ -557,7 +650,7 @@ void consultarControle() {
 
 // ── Comando infravermelho ao ar-condicionado ───────────────────────────────
 // Manda o estado inteiro (ligado em frio no alvo, ou desligado) no protocolo informado.
-bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo) {
+bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo, bool forte) {
   arCondicionado.next.protocol = protocolo;
   // LG e LG2 só diferem pelo modelo do controle (AKB75215403 = LG2); nos outros vale o primeiro.
   arCondicionado.next.model    = protocolo == decode_type_t::LG2 ? 2 : 1;
@@ -565,7 +658,9 @@ bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo) {
   arCondicionado.next.mode     = stdAc::opmode_t::kCool;
   arCondicionado.next.celsius  = true;
   arCondicionado.next.degrees  = alvo;
-  arCondicionado.next.fanspeed = stdAc::fanspeed_t::kAuto;
+  // Partida forte: ventilação no máximo e turbo, nos protocolos que têm turbo.
+  arCondicionado.next.fanspeed = forte ? stdAc::fanspeed_t::kMax : stdAc::fanspeed_t::kAuto;
+  arCondicionado.next.turbo    = forte;
   return arCondicionado.sendAc();
 }
 
@@ -606,7 +701,7 @@ void testarProtocolosIR() {
   Serial.println(F("[IR] Teste: aponte o LED para o aparelho e anote o protocolo que ele obedecer."));
   for (decode_type_t protocolo : PROTOCOLOS_TESTE) {
     Serial.printf("[IR] Testando %s: ligar em 22 C, frio\n", typeToString(protocolo).c_str());
-    enviarEstadoIR(protocolo, true, 22);
+    enviarEstadoIR(protocolo, true, 22, false);
     for (int i = 0; i < 50; i++) {
       delay(100);
       if (Serial.available()) {
@@ -616,7 +711,7 @@ void testarProtocolosIR() {
         return;
       }
     }
-    enviarEstadoIR(protocolo, false, 22);
+    enviarEstadoIR(protocolo, false, 22, false);
     delay(1500);
   }
   Serial.println(F("[IR] Fim do teste. Grave o protocolo que funcionou com IR <nome>, ex.: IR GREE."));
@@ -638,9 +733,10 @@ void processarComandosIR() {
   forcarEnvioIR = false;
   repetirQuadroIR = novo;
   ultimoQuadroIR = agora;
-  bool enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado);
-  Serial.printf("[IR] %s: %s em %d C%s%s\n", typeToString(protocoloAC).c_str(),
-                ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado, repetir ? " (repeticao)" : "",
+  bool enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado);
+  Serial.printf("[IR] %s: %s em %d C%s%s%s\n", typeToString(protocoloAC).c_str(),
+                ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado,
+                forteEnviado ? ", ventilacao maxima" : "", repetir ? " (repeticao)" : "",
                 enviado ? "" : " (falhou)");
 }
 

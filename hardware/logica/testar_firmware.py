@@ -72,12 +72,12 @@ def main() -> int:
     }
     conforto = {
         "conforto_globais.inc": extract(
-            text, "// ── Parâmetros físicos da sala", "const float TOLERANCIA_AC           = 0.5;"
+            text,
+            "// ── Controle do ar: alvo da sala",
+            "enum FaseAr { FASE_MANUTENCAO, FASE_PARTIDA, FASE_SEM_POTENCIA };",
         ),
         "conforto_funcoes.inc": extract(
-            text,
-            "// Calor sensível de uma pessoa",
-            "  return constrain(r, NR17_MIN, NR17_MAX);",
+            text, "// Calor sensível de uma pessoa", "  return correcao;"
         )
         + "}\n",
     }
