@@ -122,7 +122,13 @@ export function UnitsView({
                       <Icon name="room" />
                     </span>
                     <span className="muted">
-                      {plural(room.capacity, "pessoa", "pessoas")}
+                      {[
+                        plural(room.capacity, "pessoa", "pessoas"),
+                        room.computers > 0 &&
+                          plural(room.computers, "computador", "computadores"),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   </div>
                   <h3>{room.name}</h3>

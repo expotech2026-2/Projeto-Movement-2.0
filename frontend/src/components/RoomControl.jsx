@@ -18,7 +18,7 @@ function describe(control) {
     return `Ligado em ${control.target} °C por ${control.changed_by} até ${hour(control.expires_at)}. Depois volta ao automático.`;
   if (control.mode === "off")
     return `Desligado por ${control.changed_by} até ${hour(control.expires_at)}. Depois volta ao automático.`;
-  return "O alvo segue a ocupação, o calor das pessoas e a temperatura externa, dentro da faixa da NR-17 (18 a 25 °C). Com a sala vazia, o ar fica desligado.";
+  return "A sala mira de 20 a 23 °C, conforme a temperatura externa, a umidade e a lotação. O ESP32 começa forte até chegar perto do alvo e depois ajusta o ar pela potência dos aparelhos. Com a sala vazia, o ar fica desligado.";
 }
 
 export function RoomControl({ state, device, reading }) {

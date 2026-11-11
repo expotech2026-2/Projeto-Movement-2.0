@@ -9,6 +9,11 @@ import {
 } from "../config/catalog";
 import { findBrand, matchBrands, matchModels } from "../services/catalogMatch";
 import { catalog, cities, request } from "../services/movementApi";
+import {
+  AREA_PER_PERSON_M2,
+  computerRule,
+  roomVolume,
+} from "../services/roomHeat";
 import { CityInput } from "./CityInput";
 import { SuggestInput } from "./SuggestInput";
 
@@ -35,6 +40,9 @@ function initialValues(editing, units) {
       name: item?.name || "",
       location: item?.location || "",
       capacity: item?.capacity || 30,
+      computers: item?.computers ?? 0,
+      area_m2: item?.area_m2 ?? null,
+      ceiling_height_m: item?.ceiling_height_m ?? 3,
     };
   if (editing.type === "user")
     return {
@@ -266,7 +274,66 @@ function RoomFields({ values, update, units }) {
             onChange={(e) => update({ capacity: Number(e.target.value) })}
           />
         </label>
+        <label>
+          Computadores na sala
+          <input
+            type="number"
+            min="0"
+            max="10000"
+            required
+            value={values.computers}
+            onChange={(e) => update({ computers: Number(e.target.value) })}
+          />
+        </label>
+        <label>
+          Área da sala (m²)
+          <input
+            type="number"
+            min="1"
+            max="100000"
+            step="0.1"
+            placeholder={`Estimada: ${number(values.capacity * AREA_PER_PERSON_M2)} m²`}
+            value={values.area_m2 ?? ""}
+            onChange={(e) =>
+              update({
+                area_m2: e.target.value === "" ? null : Number(e.target.value),
+              })
+            }
+          />
+        </label>
+        <label>
+          Pé-direito (m)
+          <input
+            type="number"
+            min="2"
+            max="20"
+            step="0.1"
+            required
+            value={values.ceiling_height_m}
+            onChange={(e) =>
+              update({ ceiling_height_m: Number(e.target.value) })
+            }
+          />
+        </label>
       </div>
+      <p className="muted">
+        {computerRule(values.capacity, values.computers)} Com a área e o
+        pé-direito, o ESP32 estima o calor que entra pelas paredes e pela porta
+        numa sala de{" "}
+        <strong>
+          {number(
+            roomVolume(
+              values.area_m2,
+              values.ceiling_height_m,
+              values.capacity,
+            ),
+          )}{" "}
+          m³ de ar
+        </strong>
+        {values.area_m2
+          ? "."
+          : ` (área estimada em ${number(AREA_PER_PERSON_M2)} m² por pessoa; informe a área real para um cálculo melhor).`}
+      </p>
     </>
   );
 }
