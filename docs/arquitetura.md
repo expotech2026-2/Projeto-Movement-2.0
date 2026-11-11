@@ -269,4 +269,4 @@ Repository é um padrão do catálogo de Martin Fowler (*Patterns of Enterprise 
 | Token de dispositivo com hash SHA-256 | O banco guarda só o hash; o token aparece uma única vez no cadastro |
 | Sessões assinadas com expiração | Trocar a senha ou desativar o usuário invalida as sessões abertas |
 | Plano de leitura otimizado | Reduz a energia do ESP32 sem perder qualidade nas horas ocupadas ([Pesquisa Operacional](pesquisa-operacional.md)) |
-| CI/CD com `Devlop` e `main` | Todo PR roda lint, testes e build da imagem; só a `main` publica no Azure |
+| CI/CD com `Devlop` e `main` | Todo PR roda lint, testes e build da imagem; a `main` publica a produção e a `Devlop` um ambiente de teste com banco à parte (`movement_dev`) |

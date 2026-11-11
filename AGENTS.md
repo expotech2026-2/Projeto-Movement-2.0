@@ -17,7 +17,7 @@ frontend/src/           React 19 + Vite; services/movementApi.js é o único cli
 firmware/climacontrol/  ESP32 (Arduino C++); diagram.json é o circuito no Wokwi
 docs/                   Documentação dos requisitos da ExpoTech
 Dockerfile              Imagem de produção: site em / e API em /api (app.site:create_site)
-.github/workflows/ci.yml  CI em todas as branches; publicação no Azure só na main
+.github/workflows/ci.yml  CI em todas as branches; publica no Azure a main (latest) e a Devlop (devlop)
 ```
 
 ## Preparar o ambiente
@@ -103,7 +103,7 @@ O CI roda esses comandos, exceto o `ruff format --check`, e também constrói a 
 
 ## Fluxo de git
 
-- `main` = produção (publica no Azure). `Devlop` = integração e teste. Nunca faça push direto nelas.
+- `main` = produção (publica no Azure, schema `movement`). `Devlop` = integração e teste (Web App de teste, schema `movement_dev`). Nunca faça push direto nelas.
 - Cada issue tem uma branch `feat/<número>-<descrição>`. Se ela já existe e não tem commits próprios, atualize-a antes de começar:
 
 ```bash

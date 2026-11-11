@@ -118,15 +118,15 @@ O site tem uma única variável opcional, `VITE_API_BASE_URL`, que vale `/api` p
 | Ambiente | Branch | Endereço | Banco |
 | --- | --- | --- | --- |
 | Desenvolvimento | `feat/<n>-…` ou `fix/<n>-…` | <http://127.0.0.1:5173> | PostgreSQL local |
-| Integração e teste | `Devlop` | só no CI | PostgreSQL 18 do CI |
-| Produção | `main` | <https://movement-gxdafrgwcjd9f7gx.westus3-01.azurewebsites.net> | Supabase |
+| Integração e teste | `Devlop` | Web App de teste no Azure (imagem `devlop`) | Supabase, schema `movement_dev` |
+| Produção | `main` | <https://movement-gxdafrgwcjd9f7gx.westus3-01.azurewebsites.net> | Supabase, schema `movement` |
 
 - **CI** ([ci.yml](.github/workflows/ci.yml)) roda em todas as branches:
   - **backend:** ruff e pytest contra um PostgreSQL 18 de verdade;
   - **frontend:** lint, testes e build;
   - **firmware:** equações lógicas, lógica da porta e comandos IR extraídos do `sketch.ino`;
   - **image:** build da imagem Docker.
-- **CD:** só um push na `main` publica `movement:latest` e `movement:<sha>` no Azure Container Registry. O deploy contínuo do App Service puxa a nova `latest` e reinicia o contêiner, que migra o banco ao subir.
+- **CD:** um push na `main` publica `movement:latest`, e um push na `Devlop` publica `movement:devlop`, ambos também como `movement:<sha>` no Azure Container Registry. O deploy contínuo de cada App Service puxa a sua tag e reinicia o contêiner, que migra o próprio banco ao subir.
 - **Fluxo:** cada issue tem uma branch `feat/<número>-<descrição>`, que entra na `Devlop` por PR com merge commit. Depois de testar na `Devlop`, um humano abre o PR `Devlop → main`. Ninguém dá push direto nessas duas branches.
 
 Comandos de verificação, convenções de código e definição de pronto: [AGENTS.md](AGENTS.md).
@@ -207,6 +207,20 @@ Custos:
 - o plano F1 não tem custo, mas hiberna sem uso e limita o tempo de CPU diário.
 
 Mande os valores do `.env.supabase` e do `.env.azure.json` só por conversa privada e temporária.
+
+### Ambiente de teste da Devlop
+
+A `Devlop` roda num segundo Web App, com o mesmo código da produção e um banco à parte: o schema `movement_dev` do mesmo projeto Supabase. O usuário `movement_dev` é dono só desse schema e não tem acesso ao `movement`, então um teste na `Devlop` não altera a produção. Os dados de teste começam como uma cópia da produção.
+
+1. Crie outro **Web App** como no passo 5 acima, **no mesmo App Service Plan** da produção (não gera custo extra), com a imagem `movement` e a tag `devlop`.
+2. Na pasta `backend`, gere as variáveis a partir do `backend/.env.dev`, que fica fora do Git e tem a conexão do usuário `movement_dev` e `MOVEMENT_DATABASE_SCHEMA=movement_dev`:
+
+```powershell
+..\.venv\Scripts\python.exe scripts\azure_settings.py https://NOME-DO-APP-DEV.azurewebsites.net --source .env.dev --target .env.azure-dev.json
+```
+
+3. Copie `backend/.env.azure-dev.json` para as variáveis de ambiente do Web App de teste (passo 7), ative o **Continuous deployment** e o Health check (passo 8).
+4. O primeiro push na `Devlop` depois desta configuração publica a imagem `devlop`.
 
 ### Banco Movement existente (pgAdmin)
 
