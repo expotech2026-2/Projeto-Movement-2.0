@@ -77,3 +77,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy-dev:
+    name: Deploy movement-dev
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/Devlop'
+    runs-on: ubuntu-latest
+    environment: movement-dev
+    steps:
+      - name: Check deployment credential
+        id: check-credential
+        env:
+          PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          if [ -n "$PUBLISH_PROFILE" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AZURE_WEBAPP_PUBLISH_PROFILE is missing in environment movement-dev; App Service deployment skipped."
+          fi
+
+      - name: Deploy container to Azure App Service
+        if: steps.check-credential.outputs.configured == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: movement-dev
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: movement.azurecr.io/movement:dev
