@@ -63,6 +63,11 @@ long versaoControle = -1;
 bool externaDoSite = false;
 float tempExternaAtual = 25.0;
 float umidExternaAtual = 0.0;
+int capacidadeSala = 0;
+int computadoresSala = -1;
+float potenciaArSala = -1.0;
+float uaSala = -1.0;
+float calorFixoSala = -1.0;
 
 #include "ir_globais.inc"
 #include "ir_funcoes.inc"
@@ -99,6 +104,23 @@ int main() {
       std::printf("FALHA: %s: [%s], esperado [%s]\n", caso.botao, obtido.c_str(), caso.quadro);
       falhas++;
     }
+  }
+  if (capacidadeSala != 1 || computadoresSala != 0 || potenciaArSala != 0.0f ||
+      uaSala != 18.9f || calorFixoSala != 249.2f) {
+    std::printf("FALHA: sala de testes: %d pessoas, %d computadores, %.1f W, %.1f W/K, %.1f W\n",
+                capacidadeSala, computadoresSala, potenciaArSala, uaSala, calorFixoSala);
+    falhas++;
+  }
+  // O admin cadastra a sala e um ar de 24 000 BTU/h sem novo comando: a mesma versão já vale.
+  aplicarControle(String(
+      "{\"version\":5,\"mode\":\"auto\",\"target\":null,\"remaining_seconds\":0,"
+      "\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":40,\"computers\":20,"
+      "\"ac_power_w\":5275.5,\"ua_w_k\":137.6,\"fixed_heat_w\":2081.4}"));
+  if (capacidadeSala != 40 || computadoresSala != 20 || potenciaArSala != 5275.5f ||
+      uaSala != 137.6f || calorFixoSala != 2081.4f || !quadro().empty()) {
+    std::printf("FALHA: sala cadastrada: %d pessoas, %d computadores, %.1f W, %.1f W/K, %.1f W\n",
+                capacidadeSala, computadoresSala, potenciaArSala, uaSala, calorFixoSala);
+    falhas++;
   }
   if (falhas) return 1;
   std::printf("OK: %zu cliques do site lidos pelo firmware viram o comando IR certo\n",

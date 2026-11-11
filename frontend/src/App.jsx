@@ -404,6 +404,7 @@ function Workspace({ user, onLogout }) {
                 <strong className="unit-chip">{unit?.name}</strong>
                 {room?.location && ` · ${room.location}`}
                 {room && ` · Até ${room.capacity} pessoas`}
+                {room?.computers > 0 && ` · ${room.computers} computadores`}
               </span>
             </div>
           )}

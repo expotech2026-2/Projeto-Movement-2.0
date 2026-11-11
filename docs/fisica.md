@@ -135,7 +135,18 @@ No Wokwi, o PIR funciona em 3,3 V por simplificação da simulação. Na montage
 
 ## 8. Modelo térmico da sala e alvo do ar-condicionado
 
-O firmware calcula quanto as pessoas aquecem a sala a partir da **temperatura média do corpo humano** e usa esse valor no alvo do modo automático (`calorPorPessoa()`, `aquecimentoPessoas()` e `calcularTempRecomendada()` em `sketch.ino`, testadas por `hardware/logica/teste_conforto.cpp`).
+No modo automático, o firmware separa duas temperaturas:
+
+- **alvo da sala:** o que os alunos devem sentir, medido pelo DHT;
+- **ajuste do ar:** o que o ESP32 manda ao aparelho pelo infravermelho, o número do controle remoto.
+
+O caminho vai das pessoas na sala até o ajuste do ar:
+
+```text
+pessoas (porta) → máquinas ligadas → temperatura externa → umidade → ALVO DA SALA → AJUSTE DO AR
+```
+
+As funções `calorPorPessoa()`, `maquinasLigadas()`, `alvoSala()`, `cargaTermica()`, `proximaFase()`, `ajusteAr()` e `corrigirAjuste()` em `sketch.ino` são testadas por `hardware/logica/teste_conforto.cpp`.
 
 **Calor de uma pessoa.** O corpo perde calor sensível para o ar na proporção da diferença de temperatura entre os dois:
 
@@ -149,38 +160,85 @@ $$P = k \cdot (T_{corpo} - T_{ar})$$
 
 Com o ar a 24 °C, $P = 5{,}6 \times (36{,}5 - 24) = 70\ \text{W}$. Com o ar a 30 °C, cai para 36,4 W, porque o corpo passa a perder mais calor pelo suor, que não aquece o ar. Com o ar na temperatura do corpo, $P = 0$.
 
-**Aquecimento do ar.** Parte desse calor fica no ar da sala:
+**Calor dos computadores.** O cadastro da sala no site informa quantos computadores ela tem. O ESP32 recebe esse número e a capacidade da sala em `GET /api/devices/me/control`. Com a contagem da porta, ele estima quantas máquinas estão ligadas (`maquinasLigadas()` em `sketch.ino`, com a mesma regra em `frontend/src/services/roomHeat.js`):
 
-$$\Delta T = \frac{n \cdot P \cdot t \cdot f}{m \cdot c}, \qquad m = \rho \cdot V_{sala}$$
+- **Sala comum:** uma máquina ligada a cada 2 alunos, $\lfloor n/2 \rfloor$. Com 2 alunos, há pelo menos uma ligada.
+- **Laboratório:** quando há computadores para pelo menos 80% da capacidade (`PROPORCAO_LABORATORIO`), cada aluno usa uma máquina. Numa sala com 30 computadores e 35 lugares, os 30 estão ligados quando entra o 30º aluno.
+- **Limite:** o número de máquinas ligadas nunca passa do número de computadores da sala.
 
-| Símbolo | Valor | Significado |
+Um computador de mesa com monitor em uso dissipa cerca de 100 W (`CALOR_COMPUTADOR`). Esse calor não depende da temperatura do ar.
+
+### 8.1 Alvo da sala
+
+O alvo parte de 22 °C (`ALVO_SALA_BASE`). Ajustes:
+
+| Condição | Ajuste | Motivo |
 | --- | --- | --- |
-| $n$ | contagem da porta | Pessoas na sala |
-| $t$ | 600 s | Horizonte da previsão (`HORIZONTE_PREVISAO_S`) |
-| $f$ | 0,3 | Fração do calor retida no ar (`FATOR_RETENCAO`) |
-| $\rho$ | 1,2 kg/m³ | Densidade do ar |
-| $V_{sala}$ | 50 m³ | Volume da sala |
-| $m$ | $1{,}2 \times 50 = 60\ \text{kg}$ | Massa de ar |
-| $c$ | 1005 J/(kg·K) | Calor específico do ar |
+| 30 °C ou mais lá fora | +0,5 °C | menos choque térmico ao entrar e sair da sala |
+| 22 °C ou menos lá fora | +1 °C | dia ameno |
+| Umidade da sala acima de 70% | −1 °C | ar úmido abafa: o suor evapora pouco |
+| Umidade de 60 a 70% | −0,5 °C | |
+| Umidade abaixo de 40% | +0,5 °C | ar seco refresca |
+| Sala com 75% dos lugares ou mais (`LOTACAO_ALTA`) | −0,5 °C | calor radiante dos vizinhos |
+| Laboratório: uma máquina por aluno | −0,5 °C | um computador quente ao lado de cada aluno |
 
-- **1 pessoa, ar a 24 °C:** $\Delta T = \dfrac{1 \times 70 \times 600 \times 0{,}3}{60 \times 1005} = \dfrac{12\,600}{60\,300} \approx 0{,}21\ \text{K}$ em 10 min.
-- **10 pessoas:** $\approx 2{,}09\ \text{K}$ em 10 min.
+O alvo fica entre **20 e 23 °C** (`ALVO_SALA_MIN` e `ALVO_SALA_MAX`), faixa escolhida pela equipe. Ela fica dentro da **NR-17** (item 17.8.4.2, Portaria MTP nº 423/2021), que vai de 18 a 25 °C em ambientes climatizados. A temperatura externa vem da Open-Meteo, pela cidade da unidade; a umidade vem do DHT da sala.
 
-**Alvo do modo automático.** O alvo desconta o aquecimento previsto para os próximos 10 minutos e fica dentro da faixa da **NR-17** (item 17.8.4.2, Portaria MTP nº 423/2021): de 18 a 25 °C em ambientes climatizados.
+### 8.2 Carga térmica e uso do ar
 
-$$T_{alvo} = T_{base} - \Delta T_{10\ \text{min}}, \qquad 18\ ^\circ\text{C} \le T_{alvo} \le 25\ ^\circ\text{C}$$
+A carga é o calor que o ar precisa tirar para manter a sala no alvo. É o balanço de energia do caminho térmico (resistência térmica $R = 1/(U \cdot A)$):
 
-- $T_{base}$ = 24 °C; 23 °C com mais de 30 °C lá fora; 25,5 °C com menos de 22 °C. A temperatura externa vem da Open-Meteo, pela cidade da unidade.
-- O aparelho recebe o alvo arredondado: 21,9 °C vira 22 °C.
-- O comando manual do professor aceita de 16 a 30 °C e vale por 2 horas.
+$$Q = n \cdot k\,(T_{corpo} - T_{alvo}) + n_{pc} \cdot 100\ \text{W} + Q_{fixo} + UA\,(T_{ext} - T_{alvo})$$
 
-| Pessoas (ar a 24 °C, externa a 25 °C) | 0 | 1 | 5 | 10 | 20 | 30 |
-| --- | --- | --- | --- | --- | --- | --- |
-| $\Delta T$ em 10 min (K) | 0 | 0,21 | 1,04 | 2,09 | 4,18 | 6,27 |
-| Alvo calculado (°C) | 24 | 23,8 | 23,0 | 21,9 | 19,8 | 18 (limite da NR-17) |
-| Alvo enviado ao aparelho (°C) | 24 | 24 | 23 | 22 | 20 | 18 |
+A API calcula os números da sala pelo cadastro e os manda ao ESP32 em `GET /api/devices/me/control` (`room_thermal()` em `backend/app/thermal.py`):
 
-**Conclusão:** com 30 pessoas, o ar aquece cerca de 30 vezes mais rápido do que com uma. Uma sala cheia precisa de leituras mais frequentes, e uma sala vazia pode ser lida com menos frequência. Essa taxa de variação é o parâmetro $r_h$ do modelo de Pesquisa Operacional.
+| Campo | Cálculo | Premissa |
+| --- | --- | --- |
+| `ua_w_k` | parede externa × 2,5 + janela × 5,8 + 1 troca de ar por hora × volume × 1,2 × 1005 / 3600 | uma parede externa com o lado de uma sala quadrada (√área × pé-direito), 25% dela em vidro; U típicos, a conferir na NBR 15220 |
+| `fixed_heat_w` | área × 10 W/m² + janela × 300 W/m² × 0,85 | iluminação e sol da tarde |
+| `ac_power_w` | soma dos BTU/h dos aparelhos ativos × 0,75 / 3,412 | 75% da capacidade nominal baixa a temperatura; o resto tira umidade |
+
+Quando a área não é informada, ela é estimada em 1,5 m² por lugar (`AREA_PER_PERSON_M2`). O **uso do ar** é a carga dividida pela potência dos aparelhos ativos.
+
+### 8.3 Ajuste do ar em três fases
+
+```text
+sala > alvo + 1 °C ─► PARTIDA FORTE: ajuste = alvo − 4 (mínimo 18 °C), ventilação no máximo e turbo
+                      │ sala ≤ alvo + 0,5 °C ─► MANUTENÇÃO
+                      │ 30 min sem chegar    ─► SEM POTÊNCIA
+MANUTENÇÃO:   ajuste pelo uso do ar, ventilação automática, correção pelo DHT a cada 5 min
+SEM POTÊNCIA: ajuste = alvo − 2, ventilação no máximo, até a sala chegar a alvo + 0,5 °C
+```
+
+| Uso do ar (manutenção) | Ajuste do ar |
+| --- | --- |
+| até 80% (`USO_ALTO`) | o alvo, arredondado para baixo |
+| 80 a 100% | o alvo − 1 °C |
+| acima de 100% | o alvo − 2 °C: potência máxima, e a sala fica acima do alvo |
+
+- **Por que a partida para antes:** paredes, móveis e a serpentina continuam esfriando a sala depois que o compressor alivia. Parar a 0,5 °C do alvo evita passar do ponto.
+- **Por que não pedir 16 °C:** abaixo da temperatura da sala, qualquer ajuste já deixa o compressor no máximo. Um ajuste muito baixo só gela a sala quando a lotação cai.
+- **Correção pelo DHT:** o sensor do aparelho fica perto do teto e mede outra temperatura. A cada 5 minutos na manutenção, se a sala está mais de 0,5 °C acima do alvo, o ajuste desce 1 °C (até −2); abaixo, sobe 1 °C (até +1).
+- **Diagnóstico no site:** o ESP32 informa a fase no cabeçalho `X-Movement-AC`, por exemplo "ligado 18 C, partida forte, sala 22.5 C, MIDEA".
+- **Modo manual:** o comando do professor aceita de 16 a 30 °C, vale por 2 horas e usa ventilação automática.
+
+### 8.4 Exemplo
+
+Sala de 40 lugares, 60 m², 20 computadores (UA = 137,6 W/K; iluminação e sol = 2 081,4 W), 32 °C lá fora e umidade de 60%. Valores da manutenção; a partida forte manda 18 °C em todos os casos.
+
+| Alunos | Máquinas | Alvo da sala | Carga | Um ar de 24 000 BTU/h | Ar de 36 000 BTU/h |
+| ---: | ---: | :---: | ---: | --- | --- |
+| 0 | 0 | — | — | desligado | desligado |
+| 10 | 5 | 22,5 °C | 15 943 BTU/h | uso 89%: ajuste 21 °C, sala 22,5 °C | uso 59%: ajuste 22 °C, sala 22,5 °C |
+| 20 | 10 | 22,5 °C | 20 324 BTU/h | uso 113%: ajuste 20 °C, sala ~25,2 °C ⚠️ | uso 75%: ajuste 22 °C, sala 22,5 °C |
+| 30 | 15 | 22,0 °C | 25 226 BTU/h | uso 140%: ajuste 20 °C, sala ~28,9 °C ⚠️ | uso 93%: ajuste 21 °C, sala 22,0 °C |
+| 40 | 20 | 22,0 °C | 29 703 BTU/h | uso 165%: ajuste 20 °C, sala ~31,5 °C ⚠️ | uso 110%: ajuste 20 °C, sala ~24,2 °C ⚠️ |
+
+⚠️ O ar não dá conta. A sala se equilibra acima do alvo, quando o calor que entra fica igual à potência do ar:
+
+$$P_{ar} = n \cdot k\,(T_{corpo} - T_{sala}) + n_{pc} \cdot 100 + Q_{fixo} + UA\,(T_{ext} - T_{sala})$$
+
+**Conclusão:** a lotação muda pouco o alvo da sala (de 20 a 23 °C), mas muda muito o ajuste do ar e a potência necessária. Quando falta potência, baixar mais o ajuste não adianta: o ESP32 deixa o aparelho no máximo e o diagnóstico mostra "sem potencia". A taxa com que a sala esquenta continua sendo o parâmetro $r_h$ do modelo de Pesquisa Operacional.
 
 ## 9. Montagem real
 
@@ -346,6 +404,7 @@ Valores conferidos em 06/11/2026 nos documentos abaixo:
   - $V_{CE(sat)}$ no máximo 0,25 V com 10 mA e 0,6 V com 100 mA.
 - **NR-17 (Ergonomia):** redação da Portaria MTP nº 423, de 07/10/2021, em vigor desde 03/01/2022. O item 17.8.4.2 pede temperatura do ar entre 18 e 25 °C em ambientes climatizados (conferido em 07/11/2026). <https://abrava.com.br/wp-content/uploads/2021/11/NR-17-ERGONOMIA-ALERTA-SOBRE-EDICAO-FINAL-Comite-Nrs-1.pdf>
 - **Calor dos ocupantes:** ASHRAE Handbook, *Fundamentals*, tabela de ganho de calor por ocupantes: pessoa sentada em trabalho leve, cerca de 70 W de calor sensível.
+- **Calor dos computadores:** 100 W por máquina ligada é uma estimativa da equipe para um computador de mesa com monitor em uso. Para refinar esse valor, use a tabela de ganho de calor de equipamentos de escritório do mesmo capítulo do ASHRAE.
 - **iPEC IR15 Mini:** manual do sensor e anúncios do produto, com alimentação, consumo e contatos do relé. <https://www.cftvclube.com.br/alarmes/mini-sensor-de-barreira-ipec-ir-15-feixe-simples-infravermelho-15-metros>
 - **HC-SR501:** datasheet do módulo, distribuído por MPJA e Electrodragon. <https://courses.ece.cornell.edu/ece5990/ECE5725_Spring2020_Projects/May_15_Demo/Smart%20Lock/W_pp445_yl656/datasheet/31227sc.pdf>
   - Alimentação de 4,5 a 20 V, saída de 3,3 V e corrente estática menor que 50 µA.

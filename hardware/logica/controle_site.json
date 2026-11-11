@@ -4,37 +4,37 @@
     {
       "botao": "Ligar o ar (23 °C)",
       "comando": {"mode": "manual", "target": 23},
-      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": "LIGADO 23"
     },
     {
       "botao": "ESP32 consulta de novo, sem clique",
       "comando": null,
-      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7185,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":1,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7185,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": ""
     },
     {
       "botao": "Desligar o ar",
       "comando": {"mode": "off"},
-      "resposta": "{\"version\":2,\"mode\":\"off\",\"target\":null,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":2,\"mode\":\"off\",\"target\":null,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": "DESLIGADO"
     },
     {
       "botao": "Ligar o ar de novo (23 °C)",
       "comando": {"mode": "manual", "target": 23},
-      "resposta": "{\"version\":3,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":3,\"mode\":\"manual\",\"target\":23,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": "LIGADO 23"
     },
     {
       "botao": "Fixar temperatura (20 °C)",
       "comando": {"mode": "manual", "target": 20},
-      "resposta": "{\"version\":4,\"mode\":\"manual\",\"target\":20,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":4,\"mode\":\"manual\",\"target\":20,\"remaining_seconds\":7200,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": "LIGADO 20"
     },
     {
       "botao": "Voltar ao automático (sala vazia)",
       "comando": {"mode": "auto"},
-      "resposta": "{\"version\":5,\"mode\":\"auto\",\"target\":null,\"remaining_seconds\":0,\"temp_outside\":null,\"humidity_outside\":null}",
+      "resposta": "{\"version\":5,\"mode\":\"auto\",\"target\":null,\"remaining_seconds\":0,\"temp_outside\":null,\"humidity_outside\":null,\"capacity\":1,\"computers\":0,\"ac_power_w\":0.0,\"ua_w_k\":18.9,\"fixed_heat_w\":249.2}",
       "quadro": "DESLIGADO"
     }
   ]
