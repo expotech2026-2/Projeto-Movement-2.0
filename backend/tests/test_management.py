@@ -30,6 +30,12 @@ def test_room_and_appliance_crud_are_authenticated_and_scoped(context):
     assert second.status_code == 201
     assert len(client.get(f"{path}/appliances", headers=headers).json()) == 2
     assert client.get(f"/rooms/{other['id']}/appliances", headers=headers).json() == []
+    counts = {
+        item["id"]: item["appliance_count"]
+        for item in client.get("/rooms", headers=headers, params={"unit_id": unit}).json()
+    }
+    assert (counts[room["id"]], counts[other["id"]]) == (2, 0)
+    assert room["appliance_count"] == 0
     assert (
         client.put(
             f"/rooms/{other['id']}/appliances/{appliance['id']}", headers=headers, json=payload

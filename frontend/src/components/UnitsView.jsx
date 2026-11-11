@@ -127,17 +127,26 @@ export function UnitsView({
                   </div>
                   <h3>{room.name}</h3>
                   <p>{room.location || "Bloco/andar não informado"}</p>
+                  <p className="room-appliance-count">
+                    <Icon name="snow" size={14} />
+                    {room.appliance_count
+                      ? plural(room.appliance_count, "aparelho", "aparelhos")
+                      : "Nenhum aparelho cadastrado"}
+                  </p>
                   <div className="card-actions">
-                    <button onClick={() => onSelect(room.id)}>
-                      {room.id === roomId ? "Selecionada ✓" : "Selecionar →"}
+                    <button
+                      aria-label={`Ver os aparelhos de ${room.name}`}
+                      onClick={() => onSelect(room.id)}
+                    >
+                      {room.id === roomId ? "Selecionada ✓" : "Ver aparelhos ↓"}
                     </button>
                     {isAdmin && (
                       <>
                         <button
-                          aria-label={`Editar ${room.name}`}
+                          aria-label={`Editar ${room.name} e seus aparelhos`}
                           onClick={() => onEdit({ type: "room", item: room })}
                         >
-                          Editar
+                          Editar sala e aparelhos
                         </button>
                         <button
                           className="danger"
