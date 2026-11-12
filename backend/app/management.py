@@ -346,6 +346,21 @@ def create_management_router() -> APIRouter:
         commit(session)
         return DeviceCredential(id=device.id, room_id=room_id, enabled=device.enabled, token=token)
 
+    @router.post(
+        "/rooms/{room_id}/devices/{device_id}/token",
+        response_model=DeviceCredential,
+        dependencies=Admin,
+    )
+    def regenerate_device_token(room_id: str, device_id: str, session: Db):
+        get_room(session, room_id)
+        device = session.get(Device, device_id)
+        if device is None or device.room_id != room_id:
+            raise HTTPException(404, "Dispositivo não encontrado nesta sala")
+        token = secrets.token_urlsafe(32)
+        device.token_hash = hash_device_token(token)
+        commit(session)
+        return DeviceCredential(id=device.id, room_id=room_id, enabled=device.enabled, token=token)
+
     @router.get("/rooms/{room_id}/monthly", response_model=list[MonthlyOutput])
     def monthly(room_id: str, session: Db):
         get_room(session, room_id)

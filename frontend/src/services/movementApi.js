@@ -141,3 +141,10 @@ export function setRoomControl(roomId, command) {
     body: JSON.stringify(command),
   });
 }
+
+export function regenerateDeviceToken(roomId, deviceId) {
+  return request(
+    `/rooms/${encodeURIComponent(roomId)}/devices/${encodeURIComponent(deviceId)}/token`,
+    { method: "POST" },
+  );
+}
