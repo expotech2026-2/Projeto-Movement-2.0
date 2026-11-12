@@ -138,3 +138,25 @@ def test_device_credential_is_unique_and_telemetry_is_bound_to_room(context):
     payload["message_id"] = str(uuid4())
     payload["measured_at"] = (datetime.now(UTC) - timedelta(days=31)).isoformat()
     assert client.post("/telemetry", headers=device_headers, json=payload).status_code == 422
+
+
+def test_new_device_token_replaces_the_old_one_and_keeps_the_device(context):
+    client, admin = context["client"], context["operator_headers"]
+    room, device = context["room"], context["device"]
+    url = f"/rooms/{room}/devices/{device}/token"
+    assert client.post(url, headers=context["professor_headers"]).status_code == 403
+    missing = f"/rooms/{room}/devices/esp32-inexistente/token"
+    assert client.post(missing, headers=admin).status_code == 404
+
+    response = client.post(url, headers=admin)
+    assert response.status_code == 200
+    credential = response.json()
+    assert (credential["id"], credential["room_id"]) == (device, room)
+    assert len(credential["token"]) >= 32
+
+    control = "/devices/me/control"
+    assert client.get(control, headers=context["device_headers"]).status_code == 401
+    new_headers = {"Authorization": f"Bearer {credential['token']}"}
+    assert client.get(control, headers=new_headers).status_code == 200
+    devices = client.get(f"/rooms/{room}/devices", headers=admin).json()
+    assert [item["id"] for item in devices] == [device]

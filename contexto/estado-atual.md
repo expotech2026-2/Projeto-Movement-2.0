@@ -53,3 +53,12 @@ Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 - **Issues com texto antigo:** a #3 foi fechada com 8 dos 11 critérios pendentes. As issues #4 a #7 e #11 descrevem estados anteriores (a #6 cita a migração 0004; a #7, o desenho antigo com sensores PIR). Vale o código.
 - **Branches antigas:** `feat/5-calculos-fisica`, `feat/6-arquitetura-padroes`, `feat/7-circuito-logisim`, `Test` e `3-etapa-3-deploy-no-azure-com-cicd` já estão inteiras na `main` e podem ser apagadas.
 - **Cópia no OneDrive:** a pasta do projeto no OneDrive não funciona com git e está desatualizada. Trabalhe num clone fora do OneDrive.
+
+
+## Promoção pela Devlop em 12/11/2026
+
+- Integração com a main preserva a geração de novo token do ESP32 junto do envio de protocolo IR.
+- O deploy-dev antigo ficava esperando o registro do histórico no SCM, que respondia 503.
+  O pipeline passa a configurar a imagem imutável do commit e reiniciar pelo Azure CLI,
+  sem depender desse histórico. A prontidão é conferida com prazo limitado.
+- Na inspeção, produção respondeu health/ready 200; movement-dev respondeu 503.
