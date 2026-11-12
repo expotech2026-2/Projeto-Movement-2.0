@@ -20,7 +20,12 @@ import { useRoomControl } from "./hooks/useRoomControl";
 import { useRoomFeed } from "./hooks/useRoomFeed";
 import { useTheme } from "./hooks/useTheme";
 import { deviceStatus } from "./services/deviceStatus";
-import { clearSession, getSessionToken, request } from "./services/movementApi";
+import {
+  clearSession,
+  getSessionToken,
+  regenerateDeviceToken,
+  request,
+} from "./services/movementApi";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
 const SamplingPlan = lazy(() => import("./components/SamplingPlan"));
@@ -251,6 +256,20 @@ function Workspace({ user, onLogout }) {
       setBusy(false);
     }
   }
+  async function renewToken(device) {
+    const question =
+      `Gerar um novo token para ${device.id}? O token atual para de funcionar ` +
+      "e o ESP32 só volta a enviar depois de gravado com o novo.";
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    try {
+      setCredential(await regenerateDeviceToken(roomId, device.id));
+    } catch (error) {
+      setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const navigation = [
     { id: "overview", icon: "grid", label: "Visão geral" },
     { id: "rooms", icon: "building", label: "Unidades e salas" },
@@ -462,6 +481,7 @@ function Workspace({ user, onLogout }) {
                   onEditRoom={() => setEditing({ type: "room", item: room })}
                   onRemove={(item) => remove("appliance", item)}
                   onProvision={provision}
+                  onRenewToken={renewToken}
                   onDismissCredential={() => setCredential(null)}
                 />
               )}
@@ -530,6 +550,7 @@ function RoomInventory({
   onEditRoom,
   onRemove,
   onProvision,
+  onRenewToken,
   onDismissCredential,
 }) {
   return (
@@ -578,17 +599,24 @@ function RoomInventory({
                 : "Nenhum sensor vinculado a esta sala."}
           </p>
         </div>
-        {isAdmin && (
-          <button
-            className="button secondary"
-            disabled={busy || feed.loading || Boolean(feed.devices.length)}
-            onClick={onProvision}
-          >
-            {feed.devices.length
-              ? "Dispositivo cadastrado"
-              : "Cadastrar dispositivo"}
-          </button>
-        )}
+        {isAdmin &&
+          (feed.devices[0] ? (
+            <button
+              className="button secondary"
+              disabled={busy || feed.loading}
+              onClick={() => onRenewToken(feed.devices[0])}
+            >
+              Gerar novo token
+            </button>
+          ) : (
+            <button
+              className="button secondary"
+              disabled={busy || feed.loading}
+              onClick={onProvision}
+            >
+              Cadastrar dispositivo
+            </button>
+          ))}
       </section>
       {credential && (
         <div className="notice credential">
