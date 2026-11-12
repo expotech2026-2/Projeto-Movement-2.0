@@ -18,6 +18,7 @@ from app.control import create_control_router
 from app.database import build_session_factory
 from app.dependencies import CurrentUser, Db, Repository, require_device, require_user
 from app.events import create_alerts_router, default_subject
+from app.ir_control import create_ir_control_router
 from app.management import create_management_router
 from app.models import Device
 from app.reports import create_reports_router
@@ -36,7 +37,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0008_room_heat"
+SCHEMA_VERSION = "0009_appliance_ir"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -188,4 +189,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(create_sampling_router())
     app.include_router(create_alerts_router())
     app.include_router(create_control_router())
+    app.include_router(create_ir_control_router())
     return app

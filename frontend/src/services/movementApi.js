@@ -141,3 +141,10 @@ export function setRoomControl(roomId, command) {
     body: JSON.stringify(command),
   });
 }
+
+
+export function sendIrProtocol(roomId) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/ir-protocol`, {
+    method: "POST",
+  });
+}

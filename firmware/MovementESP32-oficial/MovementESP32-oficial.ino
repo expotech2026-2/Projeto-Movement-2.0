@@ -1,3 +1,4 @@
+#include <vector>
 // Movement 2.0 — firmware oficial do ESP32: conta as pessoas, calcula o alvo e comanda o ar
 // pelo código infravermelho do fabricante (IRremoteESP8266). Bibliotecas: libraries.txt.
 
@@ -29,7 +30,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.4.0";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.5.1";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -134,6 +135,13 @@ int  alvoEnviado   = (int)TEMP_CONFORTO_BASE;
 
 // ── Protocolo do ar-condicionado (IRremoteESP8266) ─────────────────────────
 IRac arCondicionado(pinLED_IR);
+void aplicarProtocolosSite(const String& configuracao, long revisao);
+long versaoProtocolosIR = -1;
+String configuracaoIRSite;
+bool recebeuConfiguracaoIR = false;
+std::vector<decode_type_t> protocolosSala;
+std::vector<int> modelosSala;
+int quantidadeProtocolos = 0;
 decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = sem protocolo: nada é enviado
 bool forcarEnvioIR = false;                           // reenvia o estado atual uma vez
 bool repetirQuadroIR = false;                         // confirmação do último quadro
@@ -591,6 +599,8 @@ String campoJson(const String& corpo, const char* nome) {
 
 // Aplica cada comando do site uma vez (pela versão) e guarda a temperatura externa da cidade.
 void aplicarControle(const String& corpo) {
+  if (corpo.indexOf("\"ir_protocols\":") >= 0)
+    aplicarProtocolosSite(campoJson(corpo, "ir_protocols"), campoJson(corpo, "ir_revision").toInt());
   String tExt = campoJson(corpo, "temp_outside");
   externaDoSite = tExt.length() > 0;
   if (externaDoSite) {
@@ -649,11 +659,43 @@ void consultarControle() {
 }
 
 // ── Comando infravermelho ao ar-condicionado ───────────────────────────────
+// A API envia pares PROTOCOLO:variante distintos dos aparelhos ativos da sala.
+void aplicarProtocolosSite(const String& configuracao, long revisao = 0) {
+  if (recebeuConfiguracaoIR && configuracao == configuracaoIRSite && revisao == versaoProtocolosIR) return;
+  versaoProtocolosIR = revisao;
+  recebeuConfiguracaoIR = true;
+  configuracaoIRSite = configuracao;
+  quantidadeProtocolos = 0;
+  protocolosSala.clear();
+  modelosSala.clear();
+  int inicio = 0;
+  while (inicio < (int)configuracao.length()) {
+    int fim = configuracao.indexOf(',', inicio);
+    if (fim < 0) fim = configuracao.length();
+    String par = configuracao.substring(inicio, fim);
+    int separador = par.indexOf(':');
+    if (separador > 0) {
+      decode_type_t protocolo = strToDecodeType(par.substring(0, separador).c_str());
+      int modelo = par.substring(separador + 1, par.length()).toInt();
+      if (IRac::isProtocolSupported(protocolo) && modelo >= 1 && modelo <= 6) {
+        protocolosSala.push_back(protocolo);
+        modelosSala.push_back(modelo);
+        quantidadeProtocolos++;
+      }
+    }
+    inicio = fim + 1;
+  }
+  protocoloAC = quantidadeProtocolos ? protocolosSala[0] : decode_type_t::UNKNOWN;
+  forcarEnvioIR = true;
+  repetirQuadroIR = false;
+  Serial.printf("[IR] Configuracao da sala recebida: %d protocolos\n", quantidadeProtocolos);
+}
+
 // Manda o estado inteiro (ligado em frio no alvo, ou desligado) no protocolo informado.
-bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo, bool forte) {
+bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo, bool forte, int modelo = 0) {
   arCondicionado.next.protocol = protocolo;
   // LG e LG2 só diferem pelo modelo do controle (AKB75215403 = LG2); nos outros vale o primeiro.
-  arCondicionado.next.model    = protocolo == decode_type_t::LG2 ? 2 : 1;
+  arCondicionado.next.model    = modelo > 0 ? modelo : (protocolo == decode_type_t::LG2 ? 2 : 1);
   arCondicionado.next.power    = ligado;
   arCondicionado.next.mode     = stdAc::opmode_t::kCool;
   arCondicionado.next.celsius  = true;
@@ -733,7 +775,11 @@ void processarComandosIR() {
   forcarEnvioIR = false;
   repetirQuadroIR = novo;
   ultimoQuadroIR = agora;
-  bool enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado);
+  bool enviado = false;
+  if (recebeuConfiguracaoIR) {
+    for (int i = 0; i < quantidadeProtocolos; i++)
+      enviado = enviarEstadoIR(protocolosSala[i], ligadoEnviado, alvoEnviado, forteEnviado, modelosSala[i]) || enviado;
+  } else enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado);
   Serial.printf("[IR] %s: %s em %d C%s%s%s\n", typeToString(protocoloAC).c_str(),
                 ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado,
                 forteEnviado ? ", ventilacao maxima" : "", repetir ? " (repeticao)" : "",

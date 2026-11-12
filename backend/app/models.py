@@ -53,6 +53,7 @@ class Room(Base):
     # Último comando do ar-condicionado dado pelo site; o ESP32 o busca pela versão.
     ac_mode: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto")
     ac_target: Mapped[int | None] = mapped_column(Integer)
+    ir_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     ac_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     ac_changed_by: Mapped[str | None] = mapped_column(String(60))
     ac_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -125,6 +126,9 @@ class AirConditioner(Base):
     capacity_btu: Mapped[int] = mapped_column(Integer)
     inverter: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), default="ativo")
+    ir_protocol: Mapped[str | None] = mapped_column(String(32))
+    ir_model: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    ir_source: Mapped[str] = mapped_column(String(32), default="pending", server_default="pending")
 
 
 class MonthlySummary(Base):

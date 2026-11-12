@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { roomControl, setRoomControl } from "../services/movementApi";
+import { roomControl, sendIrProtocol, setRoomControl } from "../services/movementApi";
 
 // Comando do ar-condicionado e temperatura externa (Open-Meteo) da sala.
 export function useRoomControl(roomId, refresh) {
@@ -32,5 +32,7 @@ export function useRoomControl(roomId, refresh) {
     [roomId],
   );
 
-  return { ...state, loading: state.roomId !== roomId, send };
+  const sendProtocol = useCallback(() => sendIrProtocol(roomId), [roomId]);
+
+  return { ...state, loading: state.roomId !== roomId, send, sendProtocol };
 }

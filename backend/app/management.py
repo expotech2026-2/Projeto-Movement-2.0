@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.climate import UF_BY_NAME, ClimateService, ClimateUnavailable, split_city
 from app.dependencies import Climate, Db, require_admin, require_user
 from app.device_status import is_online
+from app.ir_protocols import lookup
 from app.models import DEFAULT_UNIT_ID, DEFAULT_UNIT_NAME, AirConditioner, Device, Room, Unit
 from app.retention import monthly_history
 from app.security import hash_device_token
@@ -75,12 +76,47 @@ class ApplianceInput(BaseModel):
     capacity_btu: int = Field(ge=1000, le=500000, strict=True)
     inverter: bool = Field(default=False, strict=True)
     status: Literal["ativo", "manutencao", "inativo"] = "ativo"
+    ir_protocol: (
+        Literal[
+            "LG",
+            "LG2",
+            "GREE",
+            "SAMSUNG_AC",
+            "MIDEA",
+            "COOLIX",
+            "DAIKIN",
+            "FUJITSU_AC",
+            "HITACHI_AC",
+            "WHIRLPOOL_AC",
+            "TCL112AC",
+            "KELVINATOR",
+        ]
+        | None
+    ) = None
+    ir_model: int = Field(default=1, ge=1, le=6, strict=True)
 
 
 class ApplianceOutput(ApplianceInput):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     room_id: str
+    ir_source: str
+
+
+def resolve_appliance_ir(appliance: AirConditioner) -> None:
+    match = lookup(appliance.brand, appliance.model)
+    if appliance.ir_protocol:
+        appliance.ir_source = (
+            match["confidence"]
+            if match
+            and (appliance.ir_protocol, appliance.ir_model)
+            == (match["protocol"], match["ir_model"])
+            else "manual"
+        )
+        return
+    appliance.ir_protocol = match["protocol"] if match else None
+    appliance.ir_model = match["ir_model"] if match else 1
+    appliance.ir_source = match["confidence"] if match else "pending"
 
 
 class DeviceOutput(BaseModel):
@@ -295,6 +331,7 @@ def create_management_router() -> APIRouter:
     def create_appliance(room_id: str, payload: ApplianceInput, session: Db):
         get_room(session, room_id)
         appliance = AirConditioner(room_id=room_id, **payload.model_dump())
+        resolve_appliance_ir(appliance)
         session.add(appliance)
         commit(session)
         return appliance
@@ -314,6 +351,7 @@ def create_management_router() -> APIRouter:
         appliance = get_appliance(session, room_id, appliance_id)
         for field, value in payload.model_dump().items():
             setattr(appliance, field, value)
+        resolve_appliance_ir(appliance)
         commit(session)
         return appliance
 

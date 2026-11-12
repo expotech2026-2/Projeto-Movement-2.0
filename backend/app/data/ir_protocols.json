@@ -1,0 +1,83 @@
+[
+  {
+    "brand": "LG",
+    "model": "S4-W12JA3AA",
+    "protocol": "LG2",
+    "ir_model": 2,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_LG.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "LG",
+    "model": "TS-H122ERM1",
+    "protocol": "LG",
+    "ir_model": 5,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_LG.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "LG",
+    "model": "AMNW09GSJA0",
+    "protocol": "LG2",
+    "ir_model": 3,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_LG.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "LG",
+    "model": "AMNW24GTPA1",
+    "protocol": "LG2",
+    "ir_model": 4,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_LG.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "LG",
+    "model": "MS05SQ NW0",
+    "protocol": "LG2",
+    "ir_model": 3,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_LG.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "GREE",
+    "model": "VIR09HP115V1AH",
+    "protocol": "GREE",
+    "ir_model": 1,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Gree.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "GREE",
+    "model": "VIR12HP230V1AH",
+    "protocol": "GREE",
+    "ir_model": 1,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Gree.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "MIDEA",
+    "model": "MS12FU-10HRDN1-QRD0GW(B)",
+    "protocol": "COOLIX",
+    "ir_model": 1,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Coolix.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "MIDEA",
+    "model": "MSABAU-07HRFN1-QRD0GW",
+    "protocol": "COOLIX",
+    "ir_model": 1,
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Coolix.h",
+    "confidence": "model_documented"
+  },
+  {
+    "brand": "SAMSUNG",
+    "model": "AR24BVFAAWKNAZ",
+    "protocol": "SAMSUNG_AC",
+    "ir_model": 1,
+    "confidence": "family_candidate",
+    "source": "https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Samsung.h",
+    "model_source": "https://www.samsung.com/br/support/model/AR24BVFAAWKNAZ/"
+  }
+]
