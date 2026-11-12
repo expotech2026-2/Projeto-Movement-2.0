@@ -1,6 +1,26 @@
 # Estado atual
 
-Atualizado em **07/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+
+## Em desenvolvimento: protocolo IR pelo cadastro
+
+- Branch `fix/protocolo-ir-cadastro-ar`: cadastro salva protocolo e variante por aparelho,
+  e `GET /devices/me/control` envia os pares distintos dos aparelhos ativos da sala do token.
+- Migração `0009_appliance_ir`: preenche cadastros existentes pela marca + modelo exatos.
+- Auditoria somente leitura encontrou 3 Samsung AR24BVFAAWKNAZ em produção e 1 em teste.
+  `SAMSUNG_AC` está registrado como candidato por família, sem confirmação nesse modelo.
+- Firmware 2.5.1 aplica a configuração mesmo sem mudar a versão do comando do professor;
+  transmite cada par protocolo/variante distinto. Todos recebem o mesmo estado da sala.
+- Banco remoto expandido em 12/11/2026: 3 aparelhos de produção e 1 de teste com
+  SAMSUNG_AC, variante 1, origem family_candidate. Campos novos e revisão IR da sala
+  criados; alembic_version preservada em 0008 para manter a API publicada saudável.
+  /api/health e /api/ready responderam 200 após a mudança.
+- A migração 0009 reconhece a expansão e só avança a revisão quando a API nova entrar.
+- Botão na visão geral: Enviar protocolo para o ESP32, só para administrador e quando
+  o diagnóstico indica sem protocolo. POST /rooms/{id}/ir-protocol incrementa apenas a
+  revisão IR; o dispositivo recebe no próximo contato, sem mudar o comando do professor.
+- Código ainda sem deploy e sem gravação da placa. Falta confirmar fisicamente ligar,
+  desligar e temperatura no Samsung cadastrado.
 
 ## Pronto
 

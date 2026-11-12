@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.climate import ClimateService
 from app.dependencies import Climate, CurrentDevice, CurrentUser, Db, require_user
+from app.ir_protocols import device_protocols
 from app.management import get_room
 from app.models import AirConditioner, Room, Unit
 from app.thermal import room_thermal
@@ -62,6 +63,9 @@ class DeviceControlOutput(BaseModel):
     ac_power_w: float
     ua_w_k: float
     fixed_heat_w: float
+    ir_protocols: str = ""
+    ir_pending: int = 0
+    ir_revision: int = 0
 
 
 def effective(room: Room, now: datetime) -> tuple[str, int | None, datetime | None]:
@@ -138,6 +142,11 @@ def create_control_router() -> APIRouter:
                 AirConditioner.room_id == room.id, AirConditioner.status == "ativo"
             )
         )
+        appliances = session.scalars(
+            select(AirConditioner).where(
+                AirConditioner.room_id == room.id, AirConditioner.status == "ativo"
+            )
+        ).all()
         thermal = room_thermal(room.area_m2, room.ceiling_height_m, room.capacity, active_btu)
         return DeviceControlOutput(
             version=room.ac_version,
@@ -151,6 +160,9 @@ def create_control_router() -> APIRouter:
             ac_power_w=thermal.ac_power_w,
             ua_w_k=thermal.ua_w_k,
             fixed_heat_w=thermal.fixed_heat_w,
+            ir_protocols=device_protocols(appliances),
+            ir_pending=sum(not item.ir_protocol for item in appliances),
+            ir_revision=room.ir_revision,
         )
 
     return router

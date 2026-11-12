@@ -43,7 +43,7 @@ def compiler() -> list[str]:
 def run_test(build: Path, name: str, includes: dict[str, str]) -> int:
     for filename, code in includes.items():
         (build / filename).write_text(code, encoding="utf-8")
-    binary = build / name
+    binary = build / (name + (".exe" if os.name == "nt" else ""))
     command = [*compiler(), "-std=c++17", "-Wall", "-Wextra", "-Werror", f"-I{build}"]
     subprocess.run([*command, str(HERE / f"{name}.cpp"), "-o", str(binary)], check=True)
     return subprocess.run([str(binary)]).returncode
@@ -100,6 +100,12 @@ def main() -> int:
         )
         + "}\n",
         "casos.inc": button_cases(),
+        "protocolos.inc": extract(
+            text,
+            "// A API envia pares",
+            '  Serial.printf("[IR] Configuracao da sala recebida: %d protocolos\\n", quantidadeProtocolos);',
+        )
+        + "}\n",
     }
     with tempfile.TemporaryDirectory() as tmp:
         build = Path(tmp)
