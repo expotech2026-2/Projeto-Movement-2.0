@@ -12,6 +12,7 @@ import {
   roomControl,
   samplingPlan,
   setRoomControl,
+  sendIrProtocol,
 } from "./movementApi";
 import { apiConfig } from "../config/api";
 
@@ -154,11 +155,17 @@ describe("API Movement", () => {
   it("busca os municípios direto no IBGE, sem a sessão, e reaproveita a lista", async () => {
     storage.set("movement.operator.session", "valid-token");
     const ibge = [
-      { "municipio-id": 3509502, "municipio-nome": "Campinas", "UF-sigla": "SP" },
+      {
+        "municipio-id": 3509502,
+        "municipio-nome": "Campinas",
+        "UF-sigla": "SP",
+      },
     ];
     fetch
       .mockResolvedValueOnce(new Response("{}", { status: 503 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(ibge), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(ibge), { status: 200 }),
+      );
     await expect(cities()).rejects.toThrow("HTTP 503");
     const list = [{ id: 3509502, name: "Campinas", state: "SP" }];
     await expect(cities()).resolves.toEqual(list);
@@ -233,5 +240,34 @@ describe("API Movement", () => {
       { brand: "LG" },
     ]);
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Envio de protocolo IR", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("prepara o protocolo da sala pelo endpoint autenticado", async () => {
+    vi.stubGlobal("sessionStorage", { getItem: () => "test-session" });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ revision: 1, protocols: "SAMSUNG_AC:1" }),
+            { status: 200 },
+          ),
+        ),
+    );
+    await expect(sendIrProtocol("sala /1")).resolves.toEqual({
+      revision: 1,
+      protocols: "SAMSUNG_AC:1",
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala%20%2F1/ir-protocol`,
+      expect.objectContaining({
+        method: "POST",
+        headers: { Authorization: "Bearer test-session" },
+      }),
+    );
   });
 });

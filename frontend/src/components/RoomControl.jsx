@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { acIsOn, missingIrProtocol, powerCommand } from "../services/acPower";
 
 const MODES = {
@@ -21,10 +21,12 @@ function describe(control) {
   return "A sala mira de 20 a 23 °C, conforme a temperatura externa, a umidade e a lotação. O ESP32 começa forte até chegar perto do alvo e depois ajusta o ar pela potência dos aparelhos. Com a sala vazia, o ar fica desligado.";
 }
 
-export function RoomControl({ state, device, reading }) {
+export function RoomControl({ state, device, reading, isAdmin }) {
   const { control, error, loading, send } = state;
   const [target, setTarget] = useState("23");
   const [busy, setBusy] = useState(false);
+  const [protocolMessage, setProtocolMessage] = useState("");
+  const [protocolBusy, setProtocolBusy] = useState(false);
   const [failure, setFailure] = useState("");
 
   async function run(command) {
@@ -36,6 +38,31 @@ export function RoomControl({ state, device, reading }) {
       setFailure(problem.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendProtocol() {
+    setProtocolBusy(true);
+    setProtocolMessage("");
+    setFailure("");
+    try {
+      const result = await state.sendProtocol();
+      const warnings = [
+        result.candidates
+          ? "O protocolo é candidato: confirme a resposta do aparelho."
+          : "",
+        result.pending
+          ? `${result.pending} aparelho(s) ainda sem protocolo cadastrado.`
+          : "",
+        device?.online ? "" : "O ESP32 está offline; aguarde a reconexão.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      setProtocolMessage(`${result.message} ${warnings}`);
+    } catch (problem) {
+      setFailure(problem.message);
+    } finally {
+      setProtocolBusy(false);
     }
   }
 
@@ -92,8 +119,31 @@ export function RoomControl({ state, device, reading }) {
           {missingIrProtocol(device) && (
             <p className="notice error" role="alert">
               O ESP32 ainda não tem o protocolo infravermelho do aparelho, então
-              os comandos não chegam ao ar. No monitor serial, rode IR_TESTE e
-              grave o que funcionar com IR &lt;nome&gt;.
+              os comandos não chegam ao ar. Confira o protocolo no cadastro do
+              aparelho e atualize o firmware para recebê-lo pelo site. Se não
+              houver associação para o modelo, use IR_TESTE e selecione no
+              cadastro o protocolo que funcionar.
+            </p>
+          )}
+          {missingIrProtocol(device) && isAdmin && (
+            <button
+              className="button secondary"
+              disabled={protocolBusy}
+              onClick={sendProtocol}
+            >
+              {protocolBusy
+                ? "Preparando protocolo…"
+                : "Enviar protocolo para o ESP32"}
+            </button>
+          )}
+          {missingIrProtocol(device) && !isAdmin && (
+            <p className="muted">
+              Peça a um administrador para enviar o protocolo.
+            </p>
+          )}
+          {protocolMessage && (
+            <p className="notice" role="status">
+              {protocolMessage}
             </p>
           )}
           {control && <p className="control-status">{describe(control)}</p>}

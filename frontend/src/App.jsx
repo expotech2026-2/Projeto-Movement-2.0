@@ -216,6 +216,7 @@ function Workspace({ user, onLogout }) {
       const payload = { ...values };
       delete payload.id;
       delete payload.room_id;
+      delete payload.ir_source;
       const target = `/rooms/${encodeURIComponent(editing.roomId || roomId)}`;
       await request(`${target}/appliances${item ? `/${item.id}` : ""}`, {
         method,
@@ -755,6 +756,8 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       </div>
       {room?.id && (
         <RoomControl
+          key={room?.id}
+          isAdmin={isAdmin}
           state={control}
           device={feed.devices[0]}
           reading={feed.latest?.reading}

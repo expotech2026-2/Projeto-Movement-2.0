@@ -1,10 +1,26 @@
-# Firmware oficial para o Arduino IDE
+# Firmware ESP32 2.5.1
 
-Esta pasta abre direto no Arduino IDE, que exige o `.ino` com o mesmo nome da pasta. O código é uma cópia do `firmware/climacontrol/sketch.ino`, e o CI (`hardware/logica/testar_firmware.py`) falha se as duas cópias ficarem diferentes. Mude o `sketch.ino` e copie-o para cá.
+Esta pasta abre diretamente no Arduino IDE. O arquivo .ino tem o mesmo nome da pasta.
+As duas copias do firmware sao verificadas pelos testes do projeto.
 
-1. Copie `config.h.example` para `config.h` e preencha a URL da API, o token do dispositivo, o certificado, o Wi-Fi e o tipo do DHT. O `config.h` fica fora do Git.
-2. Instale as bibliotecas **DHT sensor library** (Adafruit) e **IRremoteESP8266**.
-3. Placa **ESP32 Dev Module**, porta COM da placa, **Carregar**.
-4. No monitor serial (115200 baud), aponte o LED para o ar e rode `IR_TESTE`. Grave o protocolo que funcionar com `IR <nome>`, por exemplo `IR GREE`.
+1. Mantenha seu config.h privado se ja existir. Caso contrario, copie config.h.example
+   para config.h e preencha Wi-Fi e o token do ESP32 ja vinculado a sala.
+   A URL de producao e o certificado DigiCert Global Root G2 estao no exemplo.
+   Nao gere outro token nem compartilhe este arquivo. Nunca envie config.h ao Git.
+2. Instale o suporte esp32 2.0.17, DHT sensor library (Adafruit) 1.4.7,
+   Adafruit Unified Sensor 1.1.15 e IRremoteESP8266 2.9.0.
+3. Escolha ESP32 Dev Module, Partition Scheme: Huge APP (3MB No OTA/1MB SPIFFS),
+   a porta COM da placa e Carregar. DHT11 usa GPIO27; emissor IR usa GPIO2.
+4. Abra o monitor serial a 115200 baud. A API precisa estar na versao nova com
+   /devices/me/control incluindo ir_protocols e ir_revision. O protocolo vem da sala
+   identificada pelo token, sem definir manualmente MOVEMENT_AC_PROTOCOLO.
+5. Na visao geral da sala, o administrador pode usar Enviar protocolo para o ESP32
+   quando aparecer sem protocolo. O envio acontece na proxima consulta: ate 15 s com
+   a sala ocupada, ou 1 min vazia. Se offline, aguarda reconexao.
+6. Confirme fisicamente ligar, temperatura e desligar. SAMSUNG_AC para AR24BVFAAWKNAZ
+   e um candidato por familia, ainda sem confirmacao nesse modelo. Se precisar testar
+   outro protocolo, use IR_TESTE e salve o que funcionar no cadastro do aparelho.
 
-Os comandos do monitor serial e a tabela de protocolos por marca estão em [contexto/hardware.md](../../contexto/hardware.md#comando-ir-ao-ar-condicionado).
+O botao prepara um reenvio da configuracao; nao liga o ar nem muda o modo do professor.
+O ESP32 confirma seu estado no contato seguinte. O dispositivo precisa receber este
+firmware: um firmware antigo nao passa a interpretar novos campos apenas pelo botao.

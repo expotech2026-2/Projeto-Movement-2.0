@@ -1,3 +1,4 @@
+#include <vector>
 // Testa no computador o caminho botão do site → resposta da API → comando IR, com o código de
 // firmware/climacontrol/sketch.ino. Compile pelo testar_firmware.py, que extrai as funções e gera
 // casos.inc a partir de controle_site.json (o mesmo arquivo que o backend confere).
@@ -25,6 +26,7 @@ class String {
   long toInt() const { return std::strtol(s_.c_str(), nullptr, 10); }
   float toFloat() const { return std::strtof(s_.c_str(), nullptr); }
   const char* c_str() const { return s_.c_str(); }
+  bool operator==(const String& outro) const { return s_ == outro.s_; }
   bool operator==(const char* outro) const { return s_ == outro; }
   friend String operator+(const String& a, const char* b) { return a.s_ + b; }
 
@@ -78,6 +80,27 @@ void atualizarResfriamento() {}
 void atualizarAutomatico() {
   if (modoAtual == MODO_AUTOMATICO) definirAlvoAC(TEMP_CONFORTO_BASE, "AUTOMATICO");
 }
+enum class decode_type_t { UNKNOWN, GREE, LG2, SAMSUNG_AC };
+bool forcarEnvioIR = false;
+bool repetirQuadroIR = false;
+long versaoProtocolosIR = -1;
+String configuracaoIRSite;
+bool recebeuConfiguracaoIR = false;
+std::vector<decode_type_t> protocolosSala;
+std::vector<int> modelosSala;
+int quantidadeProtocolos = 0;
+decode_type_t protocoloAC = decode_type_t::UNKNOWN;
+decode_type_t strToDecodeType(const char* name) {
+  std::string value(name);
+  if (value == "GREE") return decode_type_t::GREE;
+  if (value == "LG2") return decode_type_t::LG2;
+  if (value == "SAMSUNG_AC") return decode_type_t::SAMSUNG_AC;
+  return decode_type_t::UNKNOWN;
+}
+struct IRac {
+  static bool isProtocolSupported(decode_type_t value) { return value != decode_type_t::UNKNOWN; }
+};
+#include "protocolos.inc"
 #include "controle.inc"
 
 struct Caso {
@@ -122,6 +145,20 @@ int main() {
                 capacidadeSala, computadoresSala, potenciaArSala, uaSala, calorFixoSala);
     falhas++;
   }
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"LG2:2,SAMSUNG_AC:1\"}"));
+  if (quantidadeProtocolos != 2 || modelosSala[0] != 2 ||
+      protocolosSala[1] != decode_type_t::SAMSUNG_AC || !forcarEnvioIR) falhas++;
+  forcarEnvioIR = false;
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"LG2:2,SAMSUNG_AC:1\"}"));
+  if (forcarEnvioIR) falhas++;
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"\"}"));
+  if (quantidadeProtocolos != 0 || protocoloAC != decode_type_t::UNKNOWN) falhas++;
+  aplicarProtocolosSite(String("INVALIDO:1,GREE:0,LG2:7"));
+  if (quantidadeProtocolos != 0) falhas++;
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"SAMSUNG_AC:1\",\"ir_revision\":1}"));
+  forcarEnvioIR = false;
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"SAMSUNG_AC:1\",\"ir_revision\":2}"));
+  if (!forcarEnvioIR || versaoProtocolosIR != 2 || versaoControle != 5) falhas++;
   if (falhas) return 1;
   std::printf("OK: %zu cliques do site lidos pelo firmware viram o comando IR certo\n",
               sizeof(CASOS) / sizeof(CASOS[0]));

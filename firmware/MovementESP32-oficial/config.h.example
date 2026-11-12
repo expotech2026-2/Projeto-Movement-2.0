@@ -1,11 +1,30 @@
-#define MOVEMENT_API_URL "http://192.168.0.10:8000/telemetry"
-#define MOVEMENT_DEVICE_TOKEN "COLE_A_CREDENCIAL_DO_DISPOSITIVO"
-#define MOVEMENT_CA_CERT ""
-// Rede Wi-Fi da montagem. Sem estas linhas o firmware tenta a rede do Wokwi.
+#define MOVEMENT_API_URL "https://movement-gxdafrgwcjd9f7gx.westus3-01.azurewebsites.net/api/telemetry"
+#define MOVEMENT_DEVICE_TOKEN "COLE_O_TOKEN_JA_VINCULADO_A_ESTA_SALA"
 #define MOVEMENT_WIFI_SSID "NOME_DA_REDE"
 #define MOVEMENT_WIFI_PASSWORD "SENHA_DA_REDE"
-// Montagem real (docs/fisica.md, seção 9.4). Sem esta linha o firmware usa DHT22, o modelo do Wokwi.
 #define MOVEMENT_DHT_TYPE DHT11
-// Protocolo IR do ar-condicionado (contexto/hardware.md). Sem ele, nada é enviado ao aparelho.
-// O comando serial "IR <nome>" grava outro protocolo na flash e vale mais que este.
-// #define MOVEMENT_AC_PROTOCOLO "GREE"
+// O protocolo chega pelo token da sala; nao precisa configurar MOVEMENT_AC_PROTOCOLO.
+static const char MOVEMENT_CA_CERT[] = R"CERT(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohCgiN9RlUyfuI
+2/Ou8jqJkTx65qsGGmvPrC3oXgkkRLpimn7Wo6h+4FR1IAWsULecYxpsMNzaHxmx
+1x7e/dfgy5SDN67sH0NO3Xss0r0upS/kqbitOtSZpLYl6ZtrAGCSYP9PIUkY92eQ
+q2EGnI/yuum06ZIya7XzV+hdG82MHauVBJVJ8zUtluNJbd134/tJS7SsVQepj5Wz
+tCO7TG1F8PapspUwtP1MVYwnSlcUfIKdzXOS0xZKBgyMUNGPHgm+F6HmIcr9g+UQ
+vIOlCsRnKPZzFBQ9RnbDhxSJITRNrw9FDKZJobq7nMWxM4MphQIDAQABo0IwQDAP
+BgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB/wQEAwIBhjAdBgNVHQ4EFgQUTiJUIBiV
+5uNu5g/6+rkS7QYXjzkwDQYJKoZIhvcNAQELBQADggEBAGBnKJRvDkhj6zHd6mcY
+1Yl9PMWLSn/pvtsrF9+wX3N3KjITOYFnQoQj8kVnNeyIv/iPsGEMNKSuIEyExtv4
+NeF22d+mQrvHRAiGfzZ0JFrabA0UWTW98kndth/Jsw1HKj2ZL7tcu7XUIOGZX1NG
+Fdtom/DzMNU+MeKNhJ7jitralj41E6Vf8PlwUHBHQRFXGU7Aj64GxJUTFy8bJZ91
+8rGOmaFvE7FBcf6IKshPECBV1/MUReXgRPTqh5Uykw7+U0b6LJ3/iyK5S9kJRaTe
+pLiaWN0bfVKfjllDiIGknibVb63dDcY3fe0Dkhvld1927jyNxF1WW6LZZm6zNTfl
+MrY=
+-----END CERTIFICATE-----
+)CERT";

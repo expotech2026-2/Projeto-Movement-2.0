@@ -57,6 +57,8 @@ function initialValues(editing, units) {
     kind: "split",
     brand: "",
     model: "",
+    ir_protocol: null,
+    ir_model: 1,
     capacity_btu: 12000,
     inverter: false,
     status: "ativo",
@@ -216,8 +218,8 @@ function UnitFields({ values, update }) {
       <p className="field-hint">
         As sugestões são os municípios do Brasil, da API do IBGE, com os de SP
         primeiro. A temperatura externa das salas vem da Open-Meteo (ou da
-        OpenWeatherMap, se ela falhar) para esta cidade; sem cidade, o ESP32
-        usa o sensor externo, se houver.
+        OpenWeatherMap, se ela falhar) para esta cidade; sem cidade, o ESP32 usa
+        o sensor externo, se houver.
       </p>
     </>
   );
@@ -354,7 +356,11 @@ function RoomAppliances({ room, disabled, onOpen, onChanged }) {
     };
   }, [path]);
   async function remove(item) {
-    if (!window.confirm(`Excluir ${item.name}? O aparelho será removido do inventário.`))
+    if (
+      !window.confirm(
+        `Excluir ${item.name}? O aparelho será removido do inventário.`,
+      )
+    )
       return;
     setRemoving(true);
     setError("");
@@ -374,7 +380,9 @@ function RoomAppliances({ room, disabled, onOpen, onChanged }) {
         Aparelhos desta sala
         {items && <span className="count">{items.length}</span>}
       </legend>
-      {items === null && !error && <p className="muted">Carregando aparelhos…</p>}
+      {items === null && !error && (
+        <p className="muted">Carregando aparelhos…</p>
+      )}
       {items?.length === 0 && (
         <p className="muted">Nenhum aparelho cadastrado nesta sala.</p>
       )}
@@ -463,6 +471,8 @@ function ApplianceFields({ values, update }) {
   function chooseModel(item) {
     update({
       model: item.model,
+      ir_protocol: null,
+      ir_model: 1,
       kind: item.kind,
       capacity_btu: item.capacity_btu,
       inverter: item.inverter,
@@ -470,6 +480,54 @@ function ApplianceFields({ values, update }) {
   }
   return (
     <>
+      <label>
+        Protocolo infravermelho
+        <select
+          value={values.ir_protocol || ""}
+          onChange={(e) =>
+            update({
+              ir_protocol: e.target.value || null,
+              ir_model: e.target.value === "LG2" ? 2 : 1,
+            })
+          }
+        >
+          <option value="">Buscar pelo modelo ao salvar</option>
+          {[
+            "LG",
+            "LG2",
+            "GREE",
+            "SAMSUNG_AC",
+            "MIDEA",
+            "COOLIX",
+            "DAIKIN",
+            "FUJITSU_AC",
+            "HITACHI_AC",
+            "WHIRLPOOL_AC",
+            "TCL112AC",
+            "KELVINATOR",
+          ].map((name) => (
+            <option key={name}>{name}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Variante do protocolo
+        <input
+          type="number"
+          min="1"
+          max="6"
+          value={values.ir_model ?? 1}
+          onChange={(e) => update({ ir_model: Number(e.target.value) })}
+        />
+      </label>
+      <p className="field-hint">
+        O protocolo será enviado ao ESP32 desta sala. A busca prioriza o modelo
+        exato.
+        {values.ir_source === "family_candidate" &&
+          " Associação pela família: confirme no aparelho com IR_TESTE."}
+        {values.ir_source === "pending" &&
+          " Sem associação conhecida: confirme o protocolo antes de selecionar."}
+      </p>
       <label>
         Nome do aparelho
         <input
@@ -515,11 +573,18 @@ function ApplianceFields({ values, update }) {
           <SuggestInput
             label="Marca"
             value={values.brand}
-            onChange={(brand) => update({ brand })}
+            onChange={(brand) =>
+              update({ brand, ir_protocol: null, ir_model: 1 })
+            }
             options={brandOptions}
             hidden={catalogBrand?.brand === values.brand}
             onChoose={(item) =>
-              update({ brand: item.brand, model: "" })
+              update({
+                brand: item.brand,
+                model: "",
+                ir_protocol: null,
+                ir_model: 1,
+              })
             }
             describe={(item) => ({
               key: item.brand,
@@ -527,7 +592,9 @@ function ApplianceFields({ values, update }) {
               detail: `${number(item.models)} modelos`,
             })}
             placeholder={
-              brands === null ? "Carregando catálogo…" : "Comece a digitar, ex.: LG"
+              brands === null
+                ? "Carregando catálogo…"
+                : "Comece a digitar, ex.: LG"
             }
             emptyText="Marca fora do catálogo do Inmetro: pode digitar mesmo assim"
           />
@@ -537,7 +604,9 @@ function ApplianceFields({ values, update }) {
           <SuggestInput
             label="Modelo"
             value={values.model}
-            onChange={(model) => update({ model })}
+            onChange={(model) =>
+              update({ model, ir_protocol: null, ir_model: 1 })
+            }
             options={modelOptions}
             hidden={Boolean(chosen)}
             onChoose={chooseModel}

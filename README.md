@@ -561,3 +561,38 @@ A lista completa, incluindo `ruff format --check`, está no [AGENTS.md](AGENTS.m
 - O protocolo IR de cada aparelho precisa ser confirmado no próprio aparelho (`IR_TESTE`), e o ESP32 não sabe se o comando chegou: não há retorno do aparelho.
 - O CI não compila o firmware, só testa a lógica da porta e dos comandos IR; o firmware ainda não foi gravado num ESP32 real.
 - Medição de energia por aparelho e permissões por sala exigem implementações adicionais.
+
+
+### Protocolo IR cadastrado por aparelho
+
+O cadastro salva `ir_protocol`, `ir_model` (variante da biblioteca) e `ir_source`.
+A busca automática usa marca e modelo exatos da base `backend/app/data/ir_protocols.json`.
+Não associa aparelhos desconhecidos só pela marca. A migração `0009_appliance_ir`
+preenche os cadastros existentes com as mesmas regras; modelos sem associação ficam pendentes.
+O administrador pode selecionar um protocolo testado no formulário e ajustar a variante.
+
+O ESP32 autenticado pelo token recebe `ir_protocols` em `GET /api/devices/me/control`,
+por exemplo `LG2:2,SAMSUNG_AC:1`, e `ir_pending` conta os aparelhos ativos não resolvidos.
+A configuração inclui apenas a sala desse dispositivo; pares repetidos são enviados uma vez.
+O firmware 2.5.1 aplica mudanças mesmo com a mesma versão do comando, e uma lista vazia
+remove a configuração anterior. Firmware antigo não interpreta esses campos: grave a versão nova.
+O site comanda a sala inteira; aparelhos de um mesmo protocolo não são endereçados individualmente.
+O sinal precisa alcançar fisicamente todos os aparelhos.
+
+A associação Samsung AR24BVFAAWKNAZ → SAMSUNG_AC é candidata por família (`family_candidate`),
+e não uma confirmação do modelo. A biblioteca documenta SAMSUNG_AC para outros splits Samsung;
+a Samsung identifica o modelo como WindFree Connect, mas não publica o formato do quadro IR.
+Confirme na placa e no aparelho antes de considerar a integração validada fisicamente.
+Fontes: [Samsung](https://www.samsung.com/br/support/model/AR24BVFAAWKNAZ/) e
+[IRremoteESP8266](https://github.com/crankyoldgit/IRremoteESP8266/blob/v2.9.0/src/ir_Samsung.h).
+
+
+Na visão geral, um administrador pode clicar em **Enviar protocolo para o ESP32**
+quando o diagnóstico indicar que o dispositivo está sem protocolo. A configuração fica
+preparada para o próximo contato; o botão não liga o ar nem muda a temperatura.
+O endpoint `POST /api/rooms/{id}/ir-protocol` incrementa `ir_revision` independentemente
+da versão do comando do professor. O firmware 2.5.1 reaplica essa revisão.
+A preparação antecipada do banco é feita por `backend/scripts/prepare_ir_database.py`:
+`--schema movement_dev --apply` ou `--schema movement --apply`. Sem `--apply`, apenas
+confere a revisão. A expansão mantém a revisão da API publicada e a migração 0009 reconhece
+os campos já preparados. Não execute downgrade no banco remoto como etapa da publicação.
