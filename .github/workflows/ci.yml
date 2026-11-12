@@ -79,6 +79,7 @@ jobs:
 
   deploy-dev:
     name: Deploy movement-dev
+    timeout-minutes: 10
     needs: image
     if: github.event_name == 'push' && github.ref == 'refs/heads/Devlop'
     runs-on: ubuntu-latest
@@ -95,7 +96,20 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy container to Azure App Service
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: movement-dev
-          images: movement.azurecr.io/movement:dev
+        timeout-minutes: 3
+        env:
+          DEPLOY_IMAGE: ${{ vars.ACR_LOGIN_SERVER }}/movement:${{ github.sha }}
+        run: |
+          az webapp config container set --resource-group movement_group --name movement-dev --container-image-name "$DEPLOY_IMAGE" --output none
+          az webapp restart --resource-group movement_group --name movement-dev --output none
+      - name: Verify movement-dev readiness
+        timeout-minutes: 5
+        run: |
+          for attempt in $(seq 1 24); do
+            if curl --fail --silent --show-error --max-time 10 https://movement-dev-dqdbhsctd8gwb5fn.westus3-01.azurewebsites.net/api/ready; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "movement-dev nao ficou pronto; confira os logs do conteiner no Azure."
+          exit 1

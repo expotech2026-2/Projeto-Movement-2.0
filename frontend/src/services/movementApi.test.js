@@ -6,6 +6,7 @@ import {
   fetchReport,
   getSessionToken,
   login,
+  regenerateDeviceToken,
   request,
   roomAlerts,
   roomControl,
@@ -207,6 +208,23 @@ describe("API Movement", () => {
           "Content-Type": "application/json",
         }),
       }),
+    );
+  });
+
+  it("gera um novo token para o dispositivo da sala com POST", async () => {
+    fetch.mockResolvedValueOnce(
+      new Response('{"id":"esp32-1","room_id":"sala 1","token":"novo"}', {
+        status: 200,
+      }),
+    );
+    await expect(regenerateDeviceToken("sala 1", "esp32-1")).resolves.toEqual({
+      id: "esp32-1",
+      room_id: "sala 1",
+      token: "novo",
+    });
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala%201/devices/esp32-1/token`,
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
