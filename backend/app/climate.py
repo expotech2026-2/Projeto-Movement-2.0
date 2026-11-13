@@ -1,7 +1,8 @@
 """Temperatura externa: Open-Meteo (grátis, sem chave) e OpenWeatherMap como reserva."""
 
+import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -12,6 +13,7 @@ FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 OPENWEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 PREFERRED_STATE = "São Paulo"
 CACHE_SECONDS = 900  # a Open-Meteo atualiza as condições atuais a cada 15 min
+RETRY_SECONDS = 60  # com todas as fontes fora do ar, só tenta de novo depois deste tempo
 TIMEOUT_SECONDS = 5.0
 # Nomes iguais aos do IBGE e ao campo admin1 da Open-Meteo.
 UF_NAMES = {
@@ -79,6 +81,12 @@ class ClimateService(Protocol):
 
     def outside(self, latitude: float, longitude: float) -> Outside | None: ...
 
+    def outside_cached(self, latitude: float, longitude: float) -> Outside | None: ...
+
+
+def run_in_background(task: Callable[[], None]) -> None:
+    threading.Thread(target=task, daemon=True).start()
+
 
 class WeatherSource(Protocol):
     def current(self, latitude: float, longitude: float, timeout: float) -> Outside: ...
@@ -123,11 +131,18 @@ class OpenMeteoClimate:
     """Cidade pelo buscador da Open-Meteo; clima pela Open-Meteo e, se falhar, pelas reservas."""
 
     def __init__(
-        self, timeout: float = TIMEOUT_SECONDS, backups: Sequence[WeatherSource] = ()
+        self,
+        timeout: float = TIMEOUT_SECONDS,
+        backups: Sequence[WeatherSource] = (),
+        background: Callable[[Callable[[], None]], None] = run_in_background,
     ) -> None:
         self.timeout = timeout
         self.sources: list[WeatherSource] = [OpenMeteoWeather(), *backups]
+        self.background = background
         self._cache: dict[tuple[float, float], tuple[float, Outside]] = {}
+        self._failed: dict[tuple[float, float], float] = {}
+        self._refreshing: set[tuple[float, float]] = set()
+        self._lock = threading.Lock()
 
     def locate(self, city: str, uf: str | None = None) -> Place | None:
         """Coordenadas da cidade no Brasil: só na UF informada ou, sem UF, preferindo SP."""
@@ -148,18 +163,50 @@ class OpenMeteoClimate:
         best = next((item for item in results if item.get("admin1") == PREFERRED_STATE), results[0])
         return Place(best["name"], best.get("admin1", ""), best["latitude"], best["longitude"])
 
-    def outside(self, latitude: float, longitude: float) -> Outside | None:
-        """Clima atual guardado por 15 min; se todas as fontes falharem, repete o último."""
-        key = (round(latitude, 3), round(longitude, 3))
-        cached = self._cache.get(key)
+    def _needs_fetch(self, key: tuple[float, float]) -> bool:
+        """Falso com valor de menos de 15 min ou com uma falha de menos de 1 min."""
         now = time.monotonic()
+        cached, failed = self._cache.get(key), self._failed.get(key)
         if cached and now - cached[0] < CACHE_SECONDS:
-            return cached[1]
+            return False
+        return failed is None or now - failed >= RETRY_SECONDS
+
+    def _fetch(self, key: tuple[float, float], latitude: float, longitude: float) -> None:
         for source in self.sources:
             try:
                 value = source.current(latitude, longitude, self.timeout)
             except (httpx.HTTPError, KeyError, TypeError, ValueError):
                 continue
-            self._cache[key] = (now, value)
-            return value
+            self._cache[key] = (time.monotonic(), value)
+            self._failed.pop(key, None)
+            return
+        self._failed[key] = time.monotonic()
+
+    def _last(self, key: tuple[float, float]) -> Outside | None:
+        cached = self._cache.get(key)
         return cached[1] if cached else None
+
+    def outside(self, latitude: float, longitude: float) -> Outside | None:
+        """Clima atual guardado por 15 min; se todas as fontes falharem, repete o último."""
+        key = (round(latitude, 3), round(longitude, 3))
+        if self._needs_fetch(key):
+            self._fetch(key, latitude, longitude)
+        return self._last(key)
+
+    def outside_cached(self, latitude: float, longitude: float) -> Outside | None:
+        """Para o ESP32, que desiste em 5 s: responde com o que já tem e atualiza por fora."""
+        key = (round(latitude, 3), round(longitude, 3))
+        with self._lock:
+            start = self._needs_fetch(key) and key not in self._refreshing
+            if start:
+                self._refreshing.add(key)
+        if start:
+
+            def refresh() -> None:
+                try:
+                    self._fetch(key, latitude, longitude)
+                finally:
+                    self._refreshing.discard(key)
+
+            self.background(refresh)
+        return self._last(key)

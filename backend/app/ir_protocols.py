@@ -2,6 +2,7 @@
 
 import json
 import re
+from functools import cache
 from pathlib import Path
 
 DATA = Path(__file__).with_name("data") / "ir_protocols.json"
@@ -29,16 +30,15 @@ def normalize(value: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", value.upper())
 
 
+@cache
+def model_protocols() -> dict[tuple[str, str], dict]:
+    """A tabela é lida do disco uma vez; a busca vira um acesso por chave."""
+    rows = json.loads(DATA.read_text(encoding="utf-8"))
+    return {(normalize(row["brand"]), normalize(row["model"])): row for row in rows}
+
+
 def lookup(brand: str, model: str) -> dict | None:
-    key = normalize(brand), normalize(model)
-    return next(
-        (
-            row
-            for row in json.loads(DATA.read_text(encoding="utf-8"))
-            if (normalize(row["brand"]), normalize(row["model"])) == key
-        ),
-        None,
-    )
+    return model_protocols().get((normalize(brand), normalize(model)))
 
 
 def brand_candidate(brand: str) -> dict | None:

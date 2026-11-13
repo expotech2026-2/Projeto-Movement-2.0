@@ -27,6 +27,7 @@ import {
   regenerateDeviceToken,
   request,
 } from "./services/movementApi";
+import { chartPoints } from "./services/readings";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
 const SamplingPlan = lazy(() => import("./components/SamplingPlan"));
@@ -658,22 +659,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
   const [period, setPeriod] = useState("24");
   const reading = feed.latest?.reading;
   const points = useMemo(
-    () =>
-      feed.history
-        .filter(
-          (item) =>
-            Date.parse(item.measured_at) >=
-            feed.updatedAt - Number(period) * 3600000,
-        )
-        .map((item) => ({
-          ...item,
-          time: new Date(item.measured_at).toLocaleString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        })),
+    () => chartPoints(feed.history, feed.updatedAt, Number(period)),
     [feed.history, feed.updatedAt, period],
   );
   const control = useRoomControl(room?.id, feed.updatedAt);
