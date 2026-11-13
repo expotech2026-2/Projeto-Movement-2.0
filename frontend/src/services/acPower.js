@@ -4,7 +4,10 @@
 export function acIsOn(control, device, reading) {
   if (control?.mode === "off") return false;
   if (control?.mode === "manual") return true;
-  if (device?.ac_state) return device.ac_state.startsWith("ligado");
+  if (device?.ac_state?.startsWith("Xiaomi: pedido aceito: ligar")) return true;
+  if (device?.ac_state?.startsWith("Xiaomi: pedido aceito: desligar")) return false;
+  if (device?.ac_state && !device.ac_state.startsWith("Xiaomi:"))
+    return device.ac_state.startsWith("ligado");
   return Boolean(reading?.ac_on);
 }
 

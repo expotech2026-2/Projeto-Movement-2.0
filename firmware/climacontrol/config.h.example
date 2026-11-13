@@ -3,6 +3,10 @@
 #define MOVEMENT_WIFI_SSID "NOME_DA_REDE"
 #define MOVEMENT_WIFI_PASSWORD "SENHA_DA_REDE"
 #define MOVEMENT_DHT_TYPE DHT11
+// Escolha inicial; o site pode alterá-la. Chave do gateway somente neste arquivo privado.
+#define MOVEMENT_IR_TRANSPORT "esp32"
+#define MOVEMENT_XIAOMI_URL ""
+#define MOVEMENT_XIAOMI_KEY ""
 // O protocolo chega pelo token da sala; nao precisa configurar MOVEMENT_AC_PROTOCOLO.
 static const char MOVEMENT_CA_CERT[] = R"CERT(
 -----BEGIN CERTIFICATE-----

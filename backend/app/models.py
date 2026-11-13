@@ -54,6 +54,9 @@ class Room(Base):
     ac_mode: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto")
     ac_target: Mapped[int | None] = mapped_column(Integer)
     ir_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    ir_transport: Mapped[str] = mapped_column(String(10), default="esp32", server_default="esp32")
+    ir_gateway_url: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    ir_transport_revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     ac_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     ac_changed_by: Mapped[str | None] = mapped_column(String(60))
     ac_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -63,6 +66,7 @@ class Room(Base):
         CheckConstraint("area_m2 IS NULL OR area_m2 BETWEEN 1 AND 100000", name="ck_room_area"),
         CheckConstraint("ceiling_height_m BETWEEN 2 AND 20", name="ck_room_ceiling"),
         CheckConstraint("ac_mode IN ('auto', 'manual', 'off')", name="ck_room_ac_mode"),
+        CheckConstraint("ir_transport IN ('esp32', 'xiaomi')", name="ck_room_ir_transport"),
         CheckConstraint(
             "ac_target IS NULL OR ac_target BETWEEN 16 AND 30", name="ck_room_ac_target"
         ),

@@ -14,6 +14,7 @@ class String {
   String(const char* texto = "") : s_(texto) {}
   String(std::string texto) : s_(std::move(texto)) {}
   int length() const { return static_cast<int>(s_.size()); }
+  bool isEmpty() const { return s_.empty(); }
   char charAt(int i) const { return i < length() ? s_[i] : '\0'; }
   int indexOf(const String& trecho, int de = 0) const { return achar(s_.find(trecho.s_, de)); }
   int indexOf(char c, int de = 0) const { return achar(s_.find(c, de)); }
@@ -28,7 +29,9 @@ class String {
   const char* c_str() const { return s_.c_str(); }
   bool operator==(const String& outro) const { return s_ == outro.s_; }
   bool operator==(const char* outro) const { return s_ == outro; }
-  friend String operator+(const String& a, const char* b) { return a.s_ + b; }
+  bool operator!=(const char* outro) const { return s_ != outro; }
+  bool operator!=(const String& outro) const { return s_ != outro.s_; }
+  friend String operator+(const String& a, const String& b) { return a.s_ + b.s_; }
 
  private:
   static int achar(size_t posicao) {
@@ -102,8 +105,23 @@ struct IRac {
   static bool isProtocolSupported(decode_type_t value) { return value != decode_type_t::UNKNOWN; }
 };
 #include "protocolos.inc"
+void aplicarEmissorSite(const String& corpo);
 #include "controle.inc"
 #include "zerar.inc"
+#include "ir_gateway.h"
+#define MOVEMENT_IR_TRANSPORT "esp32"
+#define MOVEMENT_XIAOMI_URL ""
+String emissorIR = "esp32", enderecoXiaomi, estadoXiaomi;
+long revisaoEmissorSite = -1;
+GatewayQueue filaXiaomi;
+std::vector<int> estadosIR;
+struct {
+  void begin(const char*, bool) {}
+  void end() {}
+  void putString(const char*, const String&) {}
+  String getString(const char*, const char* fallback) { return String(fallback); }
+} preferencias;
+#include "emissor.inc"
 
 struct Caso {
   const char* botao;
@@ -180,6 +198,22 @@ int main() {
   if (!horaDeZerar(TRES_DA_MANHA + 86400, dia, 3)) falhas++;
   dia = -1;
   if (horaDeZerar(TRES_DA_MANHA, dia, -1) || horaDeZerar(1000, dia, 3)) falhas++;
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"xiaomi\",\"ir_transport_revision\":0}"));
+  if (emissorIR != "esp32") falhas++;
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"xiaomi\",\"ir_gateway_url\":\"http://10.0.0.4:8080/ac\",\"ir_transport_revision\":1}"));
+  if (emissorIR != "xiaomi" || enderecoXiaomi != "http://10.0.0.4:8080/ac" || !forcarEnvioIR) falhas++;
+  forcarEnvioIR = false;
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"xiaomi\",\"ir_transport_revision\":1}"));
+  if (forcarEnvioIR) falhas++;
+  definirEmissorIR("esp32", enderecoXiaomi, true);
+  forcarEnvioIR = false;
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"xiaomi\",\"ir_transport_revision\":1}"));
+  if (emissorIR != "esp32" || forcarEnvioIR) falhas++;
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"xiaomi\",\"ir_transport_revision\":2}"));
+  if (emissorIR != "xiaomi" || !forcarEnvioIR) falhas++;
+  estadosIR.push_back(1);
+  aplicarControle(String("{\"version\":5,\"ir_transport\":\"esp32\",\"ir_transport_revision\":3}"));
+  if (emissorIR != "esp32" || repetirQuadroIR || versaoControle != 5 || !estadosIR.empty()) falhas++;
   if (falhas) return 1;
   std::printf("OK: %zu cliques do site lidos pelo firmware viram o comando IR certo\n",
               sizeof(CASOS) / sizeof(CASOS[0]));
