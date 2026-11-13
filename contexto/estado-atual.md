@@ -12,6 +12,11 @@ Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 - Firmware 2.5.2: com a lista do site vazia, usa o protocolo gravado por `IR <nome>`.
 - Firmware 2.5.3: último estado IR guardado por protocolo (liga/desliga Samsung e turbo
   Midea/Coolix corretos com vários protocolos e depois do IR_TESTE); DHT externo opcional.
+- Firmware 2.5.4 (equipamento real): contagem guardada na memória RTC, zerada às 3 h,
+  relógio pela hora do site (`server_time`) quando o NTP não responde, handshake TLS de 8 s.
+- Site: respostas comprimidas (gzip) e `assets/` com cache de um ano; o painel pede só as
+  leituras novas (`history?since=`) e pausa com a aba oculta; `/devices/me/control` não
+  espera o clima (Open-Meteo é consultada por fora, com 1 min de espera após uma falha).
 - Auditoria somente leitura encontrou 3 Samsung AR24BVFAAWKNAZ em produção e 1 em teste.
   `SAMSUNG_AC` está registrado como candidato por família, sem confirmação nesse modelo.
 - Firmware 2.5.1 aplica a configuração mesmo sem mudar a versão do comando do professor;

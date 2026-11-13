@@ -103,6 +103,7 @@ struct IRac {
 };
 #include "protocolos.inc"
 #include "controle.inc"
+#include "zerar.inc"
 
 struct Caso {
   const char* botao;
@@ -165,6 +166,20 @@ int main() {
   forcarEnvioIR = false;
   aplicarControle(String("{\"version\":5,\"ir_protocols\":\"SAMSUNG_AC:1\",\"ir_revision\":2}"));
   if (!forcarEnvioIR || versaoProtocolosIR != 2 || versaoControle != 5) falhas++;
+  // Hora do site: só vale um valor plausível; sem o campo, o relógio fica como está.
+  if (horaDoSite(String("{\"version\":5,\"ir_revision\":2,\"server_time\":1794540000}")) != 1794540000L) falhas++;
+  if (horaDoSite(String("{\"version\":5,\"server_time\":0}")) != 0) falhas++;
+  if (horaDoSite(String("{\"version\":5}")) != 0) falhas++;
+  // 13/11/2026 06:00 UTC = 03:00 em Brasília: zera uma vez nesse dia e de novo no dia seguinte.
+  long dia = -1;
+  const long TRES_DA_MANHA = 1794549600L;
+  if (horaDeZerar(TRES_DA_MANHA - 1, dia, 3)) falhas++;
+  if (!horaDeZerar(TRES_DA_MANHA, dia, 3)) falhas++;
+  if (horaDeZerar(TRES_DA_MANHA + 1800, dia, 3)) falhas++;
+  if (horaDeZerar(TRES_DA_MANHA + 3600, dia, 3)) falhas++;
+  if (!horaDeZerar(TRES_DA_MANHA + 86400, dia, 3)) falhas++;
+  dia = -1;
+  if (horaDeZerar(TRES_DA_MANHA, dia, -1) || horaDeZerar(1000, dia, 3)) falhas++;
   if (falhas) return 1;
   std::printf("OK: %zu cliques do site lidos pelo firmware viram o comando IR certo\n",
               sizeof(CASOS) / sizeof(CASOS[0]));

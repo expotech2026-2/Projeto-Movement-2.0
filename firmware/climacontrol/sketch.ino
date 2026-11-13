@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <esp_system.h>
 #include <time.h>
+#include <sys/time.h>
 #include "DHT.h"
 #include <IRremoteESP8266.h>
 #include <IRac.h>
@@ -30,7 +31,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.5.3";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.5.4";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 #ifndef MOVEMENT_PINO_BARREIRA_A
@@ -92,6 +93,17 @@ unsigned long duracaoManual    = MANUAL_TIMEOUT_MS;   // o site manda o tempo qu
 
 // ── Estados ────────────────────────────────────────────────────────────────
 int totalPessoas          = 0;
+// A contagem fica na memória RTC: sobrevive a um reinício do ESP32 (travamento, watchdog),
+// mas não à falta de energia nem ao botão EN, que recomeçam do zero.
+RTC_NOINIT_ATTR int pessoasGuardadas;
+RTC_NOINIT_ATTR uint32_t marcaPessoas;
+const uint32_t MARCA_PESSOAS = 0x4D4F5632;
+// Erros de contagem na porta se acumulam e deixariam o ar ligado numa sala vazia: uma vez
+// por dia, nesta hora (Brasília), a sala é dada como vazia. -1 desliga.
+#ifndef MOVEMENT_HORA_ZERAR
+#define MOVEMENT_HORA_ZERAR 3
+#endif
+long diaZerado = -1;
 
 // Porta com duas barreiras: o sentido vem da ordem dos cortes (docs/eletronica-digital.md).
 enum EstadoPorta { PORTA_LIVRE, ENTRANDO_A, ENTRANDO_AB, SAINDO_B, SAINDO_BA };
@@ -194,6 +206,8 @@ void setup() {
   // A porta roda numa tarefa própria no núcleo 0, então um envio HTTP lento não perde passagens.
   filaPorta = xQueueCreate(16, sizeof(int));
   xTaskCreatePinnedToCore(tarefaPorta, "porta", 4096, nullptr, 1, nullptr, 0);
+  recuperarPessoas();
+  movementPendingPayload.reserve(320);
   carregarProtocoloIR();
   conectarWiFi();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
@@ -521,6 +535,7 @@ bool abrirMovement(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure
   if (url.startsWith("https://")) {
     if (String(MOVEMENT_CA_CERT).isEmpty()) return false;
     secure.setCACert(MOVEMENT_CA_CERT);
+    secure.setHandshakeTimeout(8);   // segundos; o padrão é 120 e prenderia o loop()
     return http.begin(secure, url);
   }
   return http.begin(plain, url);
@@ -576,7 +591,9 @@ void enviarMovement() {
   unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
   Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
-  if (code == 200 || code == 201 || code == 422) movementPendingPayload = "";
+  // Recusa definitiva (4xx que não é token, espera ou excesso de pedidos): reenviar não adianta.
+  bool recusada = code >= 400 && code < 500 && code != 401 && code != 408 && code != 429;
+  if (code == 200 || code == 201 || recusada) movementPendingPayload = "";
   http.end();
 }
 
@@ -625,6 +642,12 @@ String campoJson(const String& corpo, const char* nome) {
   return valor == "null" ? "" : valor;
 }
 
+// Hora do site em segundos desde 1970; 0 se a resposta não trouxer uma hora válida.
+long horaDoSite(const String& corpo) {
+  long hora = campoJson(corpo, "server_time").toInt();
+  return hora > 1700000000L ? hora : 0;
+}
+
 // Aplica cada comando do site uma vez (pela versão) e guarda a temperatura externa da cidade.
 void aplicarControle(const String& corpo) {
   if (corpo.indexOf("\"ir_protocols\":") >= 0)
@@ -669,6 +692,16 @@ unsigned long intervaloControle() {
   return totalPessoas > 0 || modoAtual == MODO_MANUAL ? 15000UL : 60000UL;
 }
 
+// Onde a rede bloqueia o NTP, o relógio é acertado pela hora que o site manda.
+void acertarRelogio(const String& corpo) {
+  if (time(nullptr) >= 1700000000) return;
+  long hora = horaDoSite(corpo);
+  if (hora == 0) return;
+  struct timeval agora = { (time_t)hora, 0 };
+  settimeofday(&agora, nullptr);
+  Serial.println(F("[Movement] Relogio acertado pela hora do site (NTP sem resposta)."));
+}
+
 void consultarControle() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
@@ -681,7 +714,11 @@ void consultarControle() {
   http.setTimeout(5000);
   cabecalhosMovement(http);
   int code = http.GET();
-  if (code == 200) aplicarControle(http.getString());
+  if (code == 200) {
+    String corpo = http.getString();
+    acertarRelogio(corpo);
+    aplicarControle(corpo);
+  }
   else if (code == 401)
     Serial.println(F("[SITE] Token recusado (HTTP 401): gere outro token na pagina da sala e troque no ESP32."));
   else Serial.printf("[SITE] comando indisponivel (HTTP %d)\n", code);
@@ -855,6 +892,33 @@ void exibirTotal(const char* acao) {
   Serial.print(F("  Total: ")); Serial.println(totalPessoas);
 }
 
+// Devolve true uma vez por dia, na hora de zerar; agora em segundos desde 1970 (UTC).
+bool horaDeZerar(long agora, long& ultimoDia, int hora) {
+  if (hora < 0 || agora < 1700000000L) return false;
+  long local = agora - 3L * 3600L;   // Brasília: UTC-3, sem horário de verão
+  long dia = local / 86400L;
+  if ((local % 86400L) / 3600L != hora || dia == ultimoDia) return false;
+  ultimoDia = dia;
+  return true;
+}
+
+void guardarPessoas() {
+  pessoasGuardadas = totalPessoas;
+  marcaPessoas = MARCA_PESSOAS;
+}
+
+// Depois de um reinício sem falta de energia, retoma a contagem que estava na memória RTC.
+void recuperarPessoas() {
+  esp_reset_reason_t motivo = esp_reset_reason();
+  bool reinicio = motivo == ESP_RST_SW || motivo == ESP_RST_PANIC || motivo == ESP_RST_INT_WDT ||
+                  motivo == ESP_RST_TASK_WDT || motivo == ESP_RST_WDT;
+  if (reinicio && marcaPessoas == MARCA_PESSOAS && pessoasGuardadas > 0 && pessoasGuardadas <= 10000) {
+    totalPessoas = pessoasGuardadas;
+    Serial.printf("[PRESENCA] Reinicio sem falta de energia: contagem recuperada (%d)\n", totalPessoas);
+  }
+  guardarPessoas();
+}
+
 // Aceita a leitura do pino só depois de FILTRO_BARREIRA_MS estável; devolve true se mudou.
 bool filtrarBarreira(int pino, int& estavel, int& bruta, unsigned long& desde, unsigned long agora) {
   int lida = digitalRead(pino) ^ MOVEMENT_BARREIRAS_INVERTIDAS;
@@ -918,7 +982,16 @@ void loop() {
       Serial.println(F("Aviso: sala vazia."));
       continue;
     }
+    guardarPessoas();
     atualizarAutomatico();   // só age se estiver em AUTOMATICO
+  }
+
+  // 1b) Contagem zerada uma vez por dia, de madrugada
+  if (horaDeZerar((long)time(nullptr), diaZerado, MOVEMENT_HORA_ZERAR) && totalPessoas > 0) {
+    totalPessoas = 0;
+    guardarPessoas();
+    exibirTotal("ZERADA (rotina da madrugada)");
+    atualizarAutomatico();
   }
 
   // 2) Leitura DHT

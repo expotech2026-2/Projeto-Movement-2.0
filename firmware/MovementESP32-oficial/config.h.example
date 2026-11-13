@@ -5,6 +5,7 @@
 #define MOVEMENT_DHT_TYPE DHT11
 // #define MOVEMENT_DHT_EXTERNO 0            // sem o 2o DHT11 do lado de fora
 // #define MOVEMENT_BARREIRAS_INVERTIDAS 1   // porta livre aparece "A cortada"
+// #define MOVEMENT_HORA_ZERAR 3             // hora (Brasilia) de zerar a contagem; -1 desliga
 // O protocolo chega pelo token da sala; nao precisa configurar MOVEMENT_AC_PROTOCOLO.
 static const char MOVEMENT_CA_CERT[] = R"CERT(
 -----BEGIN CERTIFICATE-----

@@ -1,4 +1,4 @@
-# Firmware ESP32 2.5.3
+# Firmware ESP32 2.5.4
 
 Esta pasta abre diretamente no Arduino IDE. O arquivo .ino tem o mesmo nome da pasta.
 As duas copias do firmware sao verificadas pelos testes do projeto.
@@ -30,3 +30,13 @@ esse estado para mandar a mensagem de ligar/desligar (Samsung) e alternar o turb
 (Midea, Coolix, Fujitsu) so quando muda; depois do IR_TESTE, recomeca de desligado.
 Opcionais no config.h: MOVEMENT_DHT_EXTERNO 0 (sem o DHT de fora),
 MOVEMENT_BARREIRAS_INVERTIDAS 1 (barreira livre aparece cortada) e MOVEMENT_PINO_*.
+
+Para o equipamento real (2.5.4):
+- A contagem de pessoas fica na memoria RTC e volta depois de um reinicio do ESP32
+  (travamento, watchdog). Falta de energia ou o botao EN recomecam do zero.
+- Uma vez por dia, as 3 h de Brasilia, a sala e dada como vazia, para um erro de contagem
+  nao deixar o ar ligado a noite toda. MOVEMENT_HORA_ZERAR muda a hora; -1 desliga.
+- Sem resposta do NTP (rede que bloqueia a porta 123), o relogio e acertado pela hora
+  que o site manda em /devices/me/control (server_time).
+- O handshake da conexao segura desiste em 8 s (o padrao do ESP32 e 120 s e prenderia
+  o loop). Uma leitura que o site recusa de vez (4xx) e descartada, e nao reenviada.
