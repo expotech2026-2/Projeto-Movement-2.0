@@ -24,19 +24,24 @@ export function DeviceDiagnostics({ device }) {
     ["Sinal Wi-Fi", signalLabel(device.rssi)],
     [
       "Ligado há",
-      device.uptime_seconds == null ? "—" : formatDuration(device.uptime_seconds),
+      device.uptime_seconds == null
+        ? "—"
+        : formatDuration(device.uptime_seconds),
     ],
     ["Sensores", sensorsLabel(device.sensor_faults)],
     ["Ar-condicionado", device.ac_state || "—"],
     ["Versão do código", device.firmware || "—"],
   ];
   return (
-    <section className="panel diagnostics-panel" aria-label="Diagnóstico do ESP32">
+    <section
+      className="panel diagnostics-panel"
+      aria-label="Diagnóstico do ESP32"
+    >
       <div className="section-heading">
         <div>
           <h2>Diagnóstico do ESP32</h2>
           <p className="muted">
-            {device.id} · fica offline depois de 2,5 min sem contato
+            {device.id} · fica offline depois de 2,5 min sem contato
           </p>
         </div>
         <StatusBadge device={device} />

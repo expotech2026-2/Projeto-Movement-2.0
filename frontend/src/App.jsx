@@ -714,8 +714,8 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       <div className="room-deck">
         <section className="room-state">
           <div className="section-heading">
-            <h2>
-              {room?.name}
+            <div className="heading-line">
+              <h2>{room?.name}</h2>
               <span className="unit-chip">{unit?.name}</span>
               {feed.loading || feed.error ? (
                 <span className="badge warning">
@@ -724,7 +724,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
               ) : (
                 <StatusBadge device={feed.devices[0]} />
               )}
-            </h2>
+            </div>
             <span className="muted">
               {reading
                 ? `Última leitura: ${new Date(reading.measured_at).toLocaleString("pt-BR")}`
@@ -777,15 +777,17 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
               {room?.name} · Leituras recebidas dos sensores
             </p>
           </div>
-          <select
-            aria-label="Período do gráfico"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          >
-            <option value="24">Últimas 24 horas</option>
-            <option value="168">Últimos 7 dias</option>
-            <option value="720">Últimos 30 dias</option>
-          </select>
+          <label className="field-inline">
+            Período
+            <select
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+            >
+              <option value="24">Últimas 24 horas</option>
+              <option value="168">Últimos 7 dias</option>
+              <option value="720">Últimos 30 dias</option>
+            </select>
+          </label>
         </div>
         {points.length ? (
           <>

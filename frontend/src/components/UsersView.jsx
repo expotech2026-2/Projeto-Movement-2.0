@@ -60,9 +60,12 @@ export function UsersView({ currentUser, onNotice }) {
     <>
       <div className="section-heading">
         <div>
-          <h2>
-            Usuários <span className="count">{users?.length ?? "…"}</span>
-          </h2>
+          <div className="heading-line">
+            <h2>Usuários</h2>
+            <span className="count">
+              {users ? `${users.length} cadastrados` : "Carregando…"}
+            </span>
+          </div>
           <p className="muted">
             Professores consultam salas, leituras e relatórios. Administradores
             também alteram cadastros e usuários.

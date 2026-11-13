@@ -54,16 +54,19 @@ export function UnitsView({
   return (
     <>
       <div className="section-heading">
-        <h2>
-          Unidades <span className="count">{units.length}</span>
-        </h2>
-        <input
-          className="search"
-          aria-label="Buscar unidade ou sala"
-          placeholder="Buscar unidade, sala ou bloco…"
-          value={search}
-          onChange={(event) => onSearch(event.target.value)}
-        />
+        <div className="heading-line">
+          <h2>Unidades</h2>
+          <span className="count">{units.length} cadastradas</span>
+        </div>
+        <label className="field-inline">
+          Buscar
+          <input
+            className="search"
+            placeholder="Unidade, sala ou bloco…"
+            value={search}
+            onChange={(event) => onSearch(event.target.value)}
+          />
+        </label>
       </div>
       {!sections.length && (
         <p className="empty-state">

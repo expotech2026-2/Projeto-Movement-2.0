@@ -71,17 +71,19 @@ export default function SamplingPlan({ roomId }) {
             linear inteira
           </p>
         </div>
-        <select
-          aria-label="Orçamento de energia"
-          value={budget}
-          onChange={(event) => setBudget(event.target.value)}
-        >
-          {BUDGETS.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <label className="field-inline">
+          Orçamento de energia
+          <select
+            value={budget}
+            onChange={(event) => setBudget(event.target.value)}
+          >
+            {BUDGETS.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       {loading ? (
         <p className="muted">Calculando plano…</p>
