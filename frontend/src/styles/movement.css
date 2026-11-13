@@ -2119,7 +2119,7 @@ td .text-button {
 /* Painel da sala: leituras dentro do estado da sala, sem vão entre o título e a temperatura */
 .room-state {
   container-type: inline-size;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: var(--s-5);
 }
 .room-state .section-heading {
