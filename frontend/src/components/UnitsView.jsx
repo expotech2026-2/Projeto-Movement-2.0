@@ -154,7 +154,7 @@ export function UnitsView({
                           aria-label={`Editar ${room.name} e seus aparelhos`}
                           onClick={() => onEdit({ type: "room", item: room })}
                         >
-                          Editar sala e aparelhos
+                          Editar sala
                         </button>
                         <button
                           className="danger"

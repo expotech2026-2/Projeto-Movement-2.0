@@ -147,20 +147,32 @@ export function RoomControl({ state, device, reading, isAdmin }) {
             </p>
           )}
           {control && <p className="control-status">{describe(control)}</p>}
-          <div className="control-actions">
+          <div className="control-actions control-set">
             <form className="control-manual" onSubmit={fix}>
-              <label htmlFor="control-target">Temperatura</label>
-              <input
-                id="control-target"
-                type="number"
-                min={16}
-                max={30}
-                step={1}
-                required
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-              />
-              <span className="muted">°C</span>
+              <div className="control-target">
+                <label htmlFor="control-target">Temperatura</label>
+                <input
+                  id="control-target"
+                  type="number"
+                  min={16}
+                  max={30}
+                  step={1}
+                  required
+                  value={target}
+                  onChange={(event) => setTarget(event.target.value)}
+                />
+                <span className="muted">°C</span>
+                <input
+                  className="target-slider"
+                  type="range"
+                  aria-label="Ajustar a temperatura desejada"
+                  min={16}
+                  max={30}
+                  step={1}
+                  value={targetValid ? Number(target) : 23}
+                  onChange={(event) => setTarget(event.target.value)}
+                />
+              </div>
               <button className="button primary" disabled={busy}>
                 Fixar temperatura
               </button>

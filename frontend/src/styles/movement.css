@@ -342,7 +342,7 @@ strong {
 .content {
   max-width: 1376px;
   margin: 0 auto;
-  padding: var(--s-7) var(--gut) 0;
+  padding: var(--s-6) var(--gut) 0;
 }
 .page-heading {
   display: flex;
@@ -372,7 +372,7 @@ footer {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--s-2) var(--s-6);
-  margin-top: var(--s-8);
+  margin-top: var(--s-7);
   padding: var(--s-5) 0 var(--s-6);
   border-top: 1px solid var(--line);
   font-size: 14px;
@@ -611,8 +611,8 @@ input::placeholder {
 }
 .chart-panel,
 .diagnostics-panel {
-  margin: 0 0 var(--s-7);
-  padding: var(--s-6) 0 0;
+  margin: 0 0 var(--s-6);
+  padding: var(--s-5) 0 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -640,7 +640,7 @@ input::placeholder {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3) var(--s-5);
-  margin-bottom: var(--s-6);
+  margin-bottom: var(--s-5);
 }
 .room-selector {
   display: flex;
@@ -685,7 +685,7 @@ input::placeholder {
   margin-bottom: var(--s-6);
 }
 .thermal {
-  margin: auto 0 0;
+  margin: 0;
 }
 .thermal-reading {
   display: flex;
@@ -1165,7 +1165,7 @@ input::placeholder {
 
 /* Unidades e salas */
 .unit-section {
-  margin-bottom: var(--s-7);
+  margin-bottom: var(--s-6);
 }
 .unit-header {
   display: flex;
@@ -2032,5 +2032,269 @@ td .text-button {
   }
   .readouts .readout:nth-child(n) {
     border: 0;
+  }
+}
+
+/* Painel da sala: leituras dentro do estado da sala, sem vão entre o título e a temperatura */
+.room-state {
+  container-type: inline-size;
+  justify-content: space-between;
+  gap: var(--s-5);
+}
+.room-state .section-heading {
+  margin-bottom: 0;
+}
+.room-state .readouts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+.room-state .readout {
+  padding: var(--s-4);
+}
+.room-state .readout dt {
+  align-items: flex-start;
+  min-height: 2.9em;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.room-state .readout dt svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.room-state .readout-value {
+  font-size: 30px;
+}
+@container (max-width: 640px) {
+  .room-state .readouts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .room-state .readout dt {
+    min-height: 0;
+  }
+}
+.thermal-reading strong.empty {
+  font-size: 56px;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.thermal-reading strong.empty small {
+  display: none;
+}
+
+/* A régua e a barra de lotação acompanham cada leitura nova */
+.thermal-track .thermal-inside,
+.thermal-track .thermal-outside,
+.thermal-track .thermal-target {
+  transition: left 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: thermal-slide 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.readout .readout-meter span {
+  transition: width 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: meter-grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+@keyframes meter-grow {
+  from {
+    width: 0;
+  }
+}
+
+/* Comando do ar: temperatura com controle deslizante e dois botões lado a lado */
+.control-set {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.control-set .control-manual {
+  display: contents;
+}
+.control-set .control-target {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.control-set .button {
+  width: 100%;
+  padding: 0 var(--s-3);
+}
+.target-slider {
+  flex: 1 1 120px;
+  min-width: 0;
+  height: 44px;
+  margin-left: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+}
+.target-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #3db8ff,
+    #19d3a2 45%,
+    #ffd23f 80%,
+    #ff8a3d
+  );
+}
+.target-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #3db8ff,
+    #19d3a2 45%,
+    #ffd23f 80%,
+    #ff8a3d
+  );
+}
+.target-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--heading);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  transition: transform 0.12s;
+}
+.target-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--heading);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.target-slider:hover::-webkit-slider-thumb,
+.target-slider:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.room-control .ir-transport {
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+.ir-transport h3 {
+  margin-bottom: var(--s-1);
+}
+.ir-transport .control-actions {
+  align-items: flex-end;
+  margin-top: var(--s-3);
+  padding-top: 0;
+  border-top: 0;
+}
+.ir-transport label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.ir-transport .notice {
+  margin: var(--s-3) 0 0;
+}
+
+/* Cartões de sala: as três ações sempre na mesma linha */
+.room-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+}
+.card-actions {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.card-actions button {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.reports-grid > *,
+.overview-bottom > * {
+  min-width: 0;
+}
+.report-scope select {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  th,
+  td {
+    padding: var(--s-3) var(--s-4);
+  }
+}
+
+/* Celular: cada linha de tabela vira um cartão com rótulo e valor */
+@media (max-width: 640px) {
+  .table-wrap table,
+  .table-wrap tbody,
+  .table-wrap tr,
+  .table-wrap td {
+    display: block;
+  }
+  .table-wrap table {
+    white-space: normal;
+  }
+  .table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table-wrap tr {
+    padding: var(--s-4);
+  }
+  .table-wrap tr + tr {
+    border-top: 1px solid var(--line);
+  }
+  .table-wrap td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-4);
+    padding: var(--s-1) 0;
+    border: 0;
+    text-align: right;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 14px;
+    text-align: left;
+    color: var(--muted);
+  }
+  .table-wrap td:first-child {
+    display: block;
+    padding-bottom: var(--s-2);
+    font-size: 18px;
+    text-align: left;
+    color: var(--heading);
+  }
+  .table-wrap td:first-child::before,
+  .table-wrap td[data-label="Ações"]::before {
+    display: none;
+  }
+  .table-wrap td[data-label="Ações"] {
+    justify-content: flex-start;
+    padding-top: var(--s-2);
+  }
+}
+@media (max-width: 380px) {
+  .card-actions {
+    flex-wrap: wrap;
+  }
+  .control-set {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1150px) {
+  .room-deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 380px) {
+  .control-set .control-target {
+    flex-wrap: wrap;
   }
 }
