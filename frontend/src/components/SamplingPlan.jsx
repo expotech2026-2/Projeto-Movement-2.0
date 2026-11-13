@@ -91,7 +91,10 @@ export default function SamplingPlan({ roomId }) {
         <>
           <div className="sampling-metrics">
             {metrics.map(([label, value]) => (
-              <div key={label}>
+              <div
+                key={label}
+                className={label === "Economia" ? "saving" : undefined}
+              >
                 <span>{label}</span>
                 <strong>{value}</strong>
               </div>
@@ -137,7 +140,7 @@ export default function SamplingPlan({ roomId }) {
                 <Bar
                   dataKey="interval"
                   name="Intervalo"
-                  fill="var(--chart-1)"
+                  fill="var(--chart-bar)"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

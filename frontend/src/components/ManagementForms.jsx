@@ -15,6 +15,7 @@ import {
   roomVolume,
 } from "../services/roomHeat";
 import { CityInput } from "./CityInput";
+import { Icon } from "./Icon";
 import { SuggestInput } from "./SuggestInput";
 
 const TITLES = {
@@ -430,7 +431,7 @@ function RoomAppliances({ room, disabled, onOpen, onChanged }) {
         disabled={disabled || removing || items === null}
         onClick={() => onOpen(null)}
       >
-        ＋ Adicionar aparelho
+        <Icon name="plus" size={16} /> Adicionar aparelho
       </button>
     </fieldset>
   );

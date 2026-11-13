@@ -90,7 +90,7 @@ export function UnitsView({
                   className="button secondary"
                   onClick={() => onEdit({ type: "room", unitId: unit.id })}
                 >
-                  ＋ Sala
+                  <Icon name="plus" size={16} /> Sala
                 </button>
                 <button
                   className="text-button"
@@ -144,7 +144,9 @@ export function UnitsView({
                       aria-label={`Ver os aparelhos de ${room.name}`}
                       onClick={() => onSelect(room.id)}
                     >
-                      {room.id === roomId ? "Selecionada ✓" : "Ver aparelhos ↓"}
+                      {room.id === roomId
+                        ? "Sala selecionada"
+                        : "Ver aparelhos"}
                     </button>
                     {isAdmin && (
                       <>
@@ -173,7 +175,7 @@ export function UnitsView({
               {term
                 ? "Nenhuma sala desta unidade corresponde à busca."
                 : isAdmin
-                  ? "Nenhuma sala nesta unidade ainda. Use “＋ Sala” para cadastrar."
+                  ? "Nenhuma sala nesta unidade ainda. Use o botão “Sala” para cadastrar."
                   : "Nenhuma sala nesta unidade ainda."}
             </p>
           )}

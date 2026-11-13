@@ -3,8 +3,8 @@ import { roomAlerts } from "../services/movementApi";
 import { Icon } from "./Icon";
 
 const KINDS = {
-  conforto: { label: "Conforto", icon: "temp", tone: "amber" },
-  umidade: { label: "Umidade", icon: "drop", tone: "blue" },
+  conforto: { label: "Conforto", icon: "temp", tone: "heat" },
+  umidade: { label: "Umidade", icon: "drop", tone: "cold" },
 };
 
 export function RoomAlerts({ roomId, refresh }) {
