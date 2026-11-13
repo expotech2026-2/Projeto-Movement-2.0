@@ -714,8 +714,8 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       <div className="room-deck">
         <section className="room-state">
           <div className="section-heading">
-            <h2>
-              {room?.name}
+            <div className="heading-line">
+              <h2>{room?.name}</h2>
               <span className="unit-chip">{unit?.name}</span>
               {feed.loading || feed.error ? (
                 <span className="badge warning">
@@ -724,7 +724,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
               ) : (
                 <StatusBadge device={feed.devices[0]} />
               )}
-            </h2>
+            </div>
             <span className="muted">
               {reading
                 ? `Última leitura: ${new Date(reading.measured_at).toLocaleString("pt-BR")}`
@@ -738,6 +738,25 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
             value={number(reading?.temp_inside)}
             detail={insideDetail}
           />
+          <dl className="readouts">
+            {cards.map((card) => (
+              <div className="readout" key={card.label}>
+                <dt>
+                  <Icon name={card.icon} size={18} />
+                  {card.label}
+                </dt>
+                <dd className="readout-value">
+                  {card.value} <small>{card.unit}</small>
+                </dd>
+                {card.meter != null && (
+                  <dd className="readout-meter" aria-hidden="true">
+                    <span style={{ width: `${card.meter}%` }} />
+                  </dd>
+                )}
+                <dd className="readout-detail">{card.detail}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
         {room?.id && (
           <RoomControl
@@ -749,25 +768,6 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           />
         )}
       </div>
-      <dl className="readouts">
-        {cards.map((card) => (
-          <div className="readout" key={card.label}>
-            <dt>
-              <Icon name={card.icon} size={18} />
-              {card.label}
-            </dt>
-            <dd className="readout-value">
-              {card.value} <small>{card.unit}</small>
-            </dd>
-            {card.meter != null && (
-              <dd className="readout-meter" aria-hidden="true">
-                <span style={{ width: `${card.meter}%` }} />
-              </dd>
-            )}
-            <dd className="readout-detail">{card.detail}</dd>
-          </div>
-        ))}
-      </dl>
       <DeviceDiagnostics device={feed.devices[0]} />
       <section className="panel chart-panel">
         <div className="section-heading">
@@ -777,15 +777,17 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
               {room?.name} · Leituras recebidas dos sensores
             </p>
           </div>
-          <select
-            aria-label="Período do gráfico"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          >
-            <option value="24">Últimas 24 horas</option>
-            <option value="168">Últimos 7 dias</option>
-            <option value="720">Últimos 30 dias</option>
-          </select>
+          <label className="field-inline">
+            Período
+            <select
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+            >
+              <option value="24">Últimas 24 horas</option>
+              <option value="168">Últimos 7 dias</option>
+              <option value="720">Últimos 30 dias</option>
+            </select>
+          </label>
         </div>
         {points.length ? (
           <>
@@ -916,17 +918,21 @@ function Appliances({ items, loading, isAdmin, onEdit, onRemove, busy }) {
         <tbody>
           {items.map((item) => (
             <tr key={item.id}>
-              <td>
+              <td data-label="Aparelho">
                 <strong>{item.name}</strong>
                 <small>
                   {[item.brand, item.model].filter(Boolean).join(" · ") ||
                     "Marca e modelo não informados"}
                 </small>
               </td>
-              <td>{AC_KINDS[item.kind]}</td>
-              <td>{number(item.capacity_btu, 0)} BTU/h</td>
-              <td>{item.inverter ? "Inverter" : "Convencional"}</td>
-              <td>
+              <td data-label="Tipo">{AC_KINDS[item.kind]}</td>
+              <td data-label="Capacidade">
+                {number(item.capacity_btu, 0)} BTU/h
+              </td>
+              <td data-label="Tecnologia">
+                {item.inverter ? "Inverter" : "Convencional"}
+              </td>
+              <td data-label="Situação">
                 <span
                   className={`badge ${item.status === "ativo" ? "success" : "warning"}`}
                 >
@@ -934,7 +940,7 @@ function Appliances({ items, loading, isAdmin, onEdit, onRemove, busy }) {
                 </span>
               </td>
               {isAdmin && (
-                <td>
+                <td data-label="Ações">
                   <button className="text-button" onClick={() => onEdit(item)}>
                     Editar
                   </button>
@@ -1003,14 +1009,22 @@ function MonthlyHistory({ feed, room }) {
             <tbody>
               {feed.monthly.map((item) => (
                 <tr key={item.month}>
-                  <td className="capitalize">{monthLabel(item.month)}</td>
-                  <td>{number(item.avg_temp_inside)} °C</td>
-                  <td>{number(item.avg_temp_outside)} °C</td>
-                  <td>{number(item.avg_humidity_inside)}%</td>
-                  <td>{number(item.avg_occupancy)}</td>
-                  <td>{number(item.ac_on_percent)}%</td>
-                  <td>{number(item.sample_count, 0)}</td>
-                  <td>
+                  <td data-label="Mês" className="capitalize">
+                    {monthLabel(item.month)}
+                  </td>
+                  <td data-label="Temp. interna">
+                    {number(item.avg_temp_inside)} °C
+                  </td>
+                  <td data-label="Temp. externa">
+                    {number(item.avg_temp_outside)} °C
+                  </td>
+                  <td data-label="Umidade int.">
+                    {number(item.avg_humidity_inside)}%
+                  </td>
+                  <td data-label="Ocupação">{number(item.avg_occupancy)}</td>
+                  <td data-label="A/C ligado">{number(item.ac_on_percent)}%</td>
+                  <td data-label="Amostras">{number(item.sample_count, 0)}</td>
+                  <td data-label="Consolidação">
                     <span
                       className={`badge ${item.finalized ? "success" : "warning"}`}
                     >

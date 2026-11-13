@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { login } from "../services/movementApi";
+import { Icon } from "./Icon";
+import { ThermalScale } from "./ThermalScale";
 
 const FACTS = [
-  "Conta quem entra e sai pela porta da sala.",
-  "Mede a temperatura e a umidade a cada leitura.",
-  "Liga, ajusta e desliga o ar pelo infravermelho.",
+  { icon: "people", text: "Conta quem entra e sai pela porta da sala." },
+  { icon: "temp", text: "Mede a temperatura e a umidade a cada leitura." },
+  { icon: "snow", text: "Liga, ajusta e desliga o ar pelo infravermelho." },
 ];
 
 export function OperatorLogin({ onLogin }) {
@@ -31,20 +33,30 @@ export function OperatorLogin({ onLogin }) {
   return (
     <div className="operator-login">
       <aside className="login-story">
-        <span className="brand">
-          <img src="/logo.svg" width={32} height={32} alt="" />
-          movement
-        </span>
-        <div>
-          <h2>Ar-condicionado automático para salas de aula.</h2>
-          <p>
-            A sala fica entre 20 e 23 °C enquanto há gente e o ar desliga quando
-            ela esvazia.
-          </p>
+        <h1>Ar-condicionado automático para salas de aula.</h1>
+        <p>
+          A sala fica entre 20 e 23 °C enquanto há gente e o ar desliga quando
+          ela esvazia.
+        </p>
+        <div className="login-demo">
+          <div className="login-demo__head">
+            <strong>Sala em aula</strong>
+            <span className="badge success">Exemplo</span>
+          </div>
+          <ThermalScale
+            inside={22.4}
+            outside={31}
+            target={22}
+            value="22,4"
+            detail="Alvo do ar: 22 °C, com 24 pessoas na sala"
+          />
         </div>
         <ul className="login-facts">
           {FACTS.map((fact) => (
-            <li key={fact}>{fact}</li>
+            <li key={fact.text}>
+              <Icon name={fact.icon} size={22} />
+              {fact.text}
+            </li>
           ))}
         </ul>
       </aside>
@@ -53,8 +65,12 @@ export function OperatorLogin({ onLogin }) {
           className="panel panel--padded operator-login__form"
           onSubmit={handleSubmit}
         >
-          <h1>Acessar o Movement</h1>
-          <p>Entre para acompanhar seu ambiente.</p>
+          <span className="brand">
+            <img src="/logo.svg" width={44} height={44} alt="" />
+            movement
+          </span>
+          <h2>Acessar o Movement</h2>
+          <p>Entre para acompanhar as salas e comandar o ar-condicionado.</p>
           <label htmlFor="operator-username">Usuário</label>
           <input
             id="operator-username"
@@ -75,8 +91,11 @@ export function OperatorLogin({ onLogin }) {
             onChange={(event) => setPassword(event.target.value)}
           />
           {error && <p role="alert">{error}</p>}
+          <p className="sr-only" role="status">
+            {busy ? "Entrando no painel" : ""}
+          </p>
           <button className="btn btn--primary" type="submit" disabled={busy}>
-            {busy ? "Entrando..." : "Entrar"}
+            {busy ? "Entrando..." : "Entrar no painel"}
           </button>
         </form>
       </main>
