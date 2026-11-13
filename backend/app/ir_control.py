@@ -50,7 +50,7 @@ def create_ir_control_router() -> APIRouter:
             revision=revision,
             protocols=protocols,
             pending=sum(not item.ir_protocol for item in appliances),
-            candidates=sum(item.ir_source == "family_candidate" for item in appliances),
+            candidates=sum(item.ir_source.endswith("_candidate") for item in appliances),
             message="Protocolo preparado. O ESP32 receberá no próximo contato com o site.",
         )
 

@@ -491,7 +491,7 @@ function ApplianceFields({ values, update }) {
             })
           }
         >
-          <option value="">Buscar pelo modelo ao salvar</option>
+          <option value="">Automático: pelo modelo ou pela marca</option>
           {[
             "LG",
             "LG2",
@@ -521,12 +521,14 @@ function ApplianceFields({ values, update }) {
         />
       </label>
       <p className="field-hint">
-        O protocolo será enviado ao ESP32 desta sala. A busca prioriza o modelo
-        exato.
+        O protocolo será enviado ao ESP32 desta sala. A busca usa o modelo
+        exato e, sem ele, o protocolo mais comum da marca.
         {values.ir_source === "family_candidate" &&
           " Associação pela família: confirme no aparelho com IR_TESTE."}
+        {values.ir_source === "brand_candidate" &&
+          " Protocolo escolhido pela marca: confirme no aparelho com IR_TESTE."}
         {values.ir_source === "pending" &&
-          " Sem associação conhecida: confirme o protocolo antes de selecionar."}
+          " Marca sem protocolo conhecido: rode IR_TESTE no ESP32 e selecione o que funcionar."}
       </p>
       <label>
         Nome do aparelho

@@ -14,10 +14,13 @@ como WindFree Connect. A [IRremoteESP8266 v2.9.0](https://github.com/crankyoldgi
 implementa SAMSUNG_AC para diversos splits Samsung, mas não lista AR24BVFAAWKNAZ.
 A associação desse modelo está salva como `family_candidate`, uma inferência por família,
 e precisa de teste físico. Não há comprovação de compatibilidade desse modelo exato.
-Não foram preenchidos os 1.507 modelos do catálogo por suposição de marca.
+Dos 1.507 modelos do catálogo do Inmetro, só esse tem correspondência exata. Por isso,
+sem o modelo exato, o cadastro usa o protocolo mais comum da marca como `brand_candidate`
+(`BRAND_PROTOCOLS` em `backend/app/ir_protocols.py`), também sujeito a teste físico.
 
 As associações ficam em `backend/app/data/ir_protocols.json`, com fonte, modelo e variante.
-Modelos documentados da LG, Gree e Midea têm correspondência exata; desconhecidos ficam pendentes.
+Modelos documentados da LG, Gree e Midea têm correspondência exata; os outros recebem o
+candidato da marca, e marcas sem protocolo conhecido ficam pendentes.
 A migração 0009 contém sua própria cópia estável das associações para os registros existentes.
 Novos cadastros usam a base atual. O formulário permite informar uma configuração testada.
 
@@ -30,10 +33,11 @@ Novos cadastros usam a base atual. O formulário permite informar uma configura�
 5. Cada par distinto é enviado uma vez por quadro; a repetição existente ocorre 2 s depois.
    Os aparelhos da sala recebem o mesmo estado, sem endereçamento individual.
 6. Aparelhos inativos ou em manutenção não entram na configuração. Remover todos os protocolos
-   envia uma lista vazia e limpa o estado anterior. Modelos desconhecidos não impedem os conhecidos.
+   envia uma lista vazia; o firmware 2.5.2 volta ao protocolo gravado por `IR <nome>`.
+   Modelos desconhecidos não impedem os conhecidos.
 
 Não se grava a flash a cada consulta. O ESP32 recupera a configuração pelo token após reiniciar.
-A configuração antiga por serial/config.h só serve de fallback antes da primeira configuração da API.
+O protocolo gravado por serial/config.h vale enquanto o site não tiver protocolo para a sala.
 `IR_TESTE` ajuda a confirmar o protocolo; salve o resultado no cadastro do aparelho.
 
 ## Implantação e teste físico pendentes

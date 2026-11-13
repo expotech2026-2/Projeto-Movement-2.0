@@ -30,7 +30,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.5.1";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.5.2";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 const int pinBarreiraA = 13;   // barreira do lado de fora da porta
@@ -143,6 +143,7 @@ std::vector<decode_type_t> protocolosSala;
 std::vector<int> modelosSala;
 int quantidadeProtocolos = 0;
 decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = sem protocolo: nada é enviado
+decode_type_t protocoloLocal = decode_type_t::UNKNOWN;   // IR <nome>: vale se o site não tiver nenhum
 bool forcarEnvioIR = false;                           // reenvia o estado atual uma vez
 bool repetirQuadroIR = false;                         // confirmação do último quadro
 unsigned long ultimoQuadroIR = 0;
@@ -685,7 +686,7 @@ void aplicarProtocolosSite(const String& configuracao, long revisao = 0) {
     }
     inicio = fim + 1;
   }
-  protocoloAC = quantidadeProtocolos ? protocolosSala[0] : decode_type_t::UNKNOWN;
+  protocoloAC = quantidadeProtocolos ? protocolosSala[0] : protocoloLocal;
   forcarEnvioIR = true;
   repetirQuadroIR = false;
   Serial.printf("[IR] Configuracao da sala recebida: %d protocolos\n", quantidadeProtocolos);
@@ -711,7 +712,8 @@ void definirProtocoloIR(String nome, bool salvar) {
   nome.trim();
   nome.toUpperCase();
   if (nome.isEmpty() || nome == "SIMULADO") {   // SIMULADO: valor gravado por firmwares antigos
-    protocoloAC = decode_type_t::UNKNOWN;
+    protocoloLocal = decode_type_t::UNKNOWN;
+    if (!quantidadeProtocolos) protocoloAC = protocoloLocal;
     Serial.println(F("[IR] Sem protocolo do aparelho: rode IR_TESTE e grave o que funcionar com IR <nome>."));
     return;
   }
@@ -725,9 +727,12 @@ void definirProtocoloIR(String nome, bool salvar) {
     preferencias.putString("ir_protocolo", nome);
     preferencias.end();
   }
-  protocoloAC = protocolo;
+  protocoloLocal = protocolo;
+  if (!quantidadeProtocolos) protocoloAC = protocolo;
   forcarEnvioIR = true;   // sincroniza o aparelho com o estado atual
   Serial.printf("[IR] Protocolo: %s\n", nome.c_str());
+  if (quantidadeProtocolos)
+    Serial.println(F("[IR] O site ja define o protocolo da sala; o gravado vale quando o site nao tiver nenhum."));
 }
 
 // O protocolo gravado pelo comando IR vale mais que o do config.h.
@@ -776,7 +781,7 @@ void processarComandosIR() {
   repetirQuadroIR = novo;
   ultimoQuadroIR = agora;
   bool enviado = false;
-  if (recebeuConfiguracaoIR) {
+  if (quantidadeProtocolos > 0) {
     for (int i = 0; i < quantidadeProtocolos; i++)
       enviado = enviarEstadoIR(protocolosSala[i], ligadoEnviado, alvoEnviado, forteEnviado, modelosSala[i]) || enviado;
   } else enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado);

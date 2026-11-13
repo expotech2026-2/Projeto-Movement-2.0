@@ -567,15 +567,18 @@ A lista completa, incluindo `ruff format --check`, está no [AGENTS.md](AGENTS.m
 
 O cadastro salva `ir_protocol`, `ir_model` (variante da biblioteca) e `ir_source`.
 A busca automática usa marca e modelo exatos da base `backend/app/data/ir_protocols.json`.
-Não associa aparelhos desconhecidos só pela marca. A migração `0009_appliance_ir`
-preenche os cadastros existentes com as mesmas regras; modelos sem associação ficam pendentes.
+Sem o modelo exato, usa o protocolo mais comum da marca (`brand_candidate`, ex.: LG → LG2,
+Gree → GREE, Midea/Springer/Carrier → COOLIX), que precisa ser confirmado com `IR_TESTE`.
+Marcas sem protocolo conhecido (ex.: Elgin, Philco) ficam pendentes. As migrações
+`0009_appliance_ir` e `0010_ir_brand_candidate` aplicam as mesmas regras aos cadastros existentes.
 O administrador pode selecionar um protocolo testado no formulário e ajustar a variante.
 
 O ESP32 autenticado pelo token recebe `ir_protocols` em `GET /api/devices/me/control`,
 por exemplo `LG2:2,SAMSUNG_AC:1`, e `ir_pending` conta os aparelhos ativos não resolvidos.
 A configuração inclui apenas a sala desse dispositivo; pares repetidos são enviados uma vez.
-O firmware 2.5.1 aplica mudanças mesmo com a mesma versão do comando, e uma lista vazia
-remove a configuração anterior. Firmware antigo não interpreta esses campos: grave a versão nova.
+O firmware 2.5.2 aplica mudanças mesmo com a mesma versão do comando. Com a lista vazia,
+usa o protocolo gravado no ESP32 pelo comando serial `IR <nome>`.
+Firmware antigo não interpreta esses campos: grave a versão nova.
 O site comanda a sala inteira; aparelhos de um mesmo protocolo não são endereçados individualmente.
 O sinal precisa alcançar fisicamente todos os aparelhos.
 
