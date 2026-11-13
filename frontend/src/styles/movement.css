@@ -2298,3 +2298,75 @@ td .text-button {
     flex-wrap: wrap;
   }
 }
+
+/* Celular: o comando do ar vem logo depois da temperatura; leituras e explicações ficam abaixo */
+@media (max-width: 640px) {
+  .heading-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2);
+  }
+  .heading-actions .button {
+    padding: 0 var(--s-2);
+    font-size: 15px;
+  }
+  .heading-actions .button svg {
+    display: none;
+  }
+  .room-deck {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-5);
+    padding: var(--s-5);
+    background:
+      linear-gradient(160deg, var(--cool-soft), transparent 60%), var(--surface);
+  }
+  .room-deck .room-state {
+    display: contents;
+  }
+  .room-deck .room-control {
+    order: 2;
+    padding: var(--s-5) 0 0;
+  }
+  .room-state .readouts {
+    order: 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .room-state .readout dt {
+    min-height: 0;
+  }
+  .room-control .section-heading,
+  .room-control .section-heading > div {
+    display: contents;
+  }
+  .room-control .section-heading h2 {
+    margin-bottom: var(--s-4);
+  }
+  .room-control .section-heading p {
+    order: 9;
+    margin-top: var(--s-5);
+  }
+}
+@media (max-width: 350px) {
+  .heading-actions {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .control-set {
+    grid-template-columns: 1fr;
+  }
+  .control-set .control-target {
+    flex-wrap: wrap;
+  }
+  .control-set .target-slider {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+@media (min-width: 641px) {
+  .heading-actions {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+  }
+}
