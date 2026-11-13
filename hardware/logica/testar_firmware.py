@@ -100,6 +100,8 @@ def main() -> int:
         )
         + "}\n",
         "casos.inc": button_cases(),
+        "zerar.inc": extract(text, "// Devolve true uma vez por dia", "  return true;")
+        + "}\n",
         "protocolos.inc": extract(
             text,
             "// A API envia pares",

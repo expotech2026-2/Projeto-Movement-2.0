@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.climate import ClimateService
@@ -66,6 +66,8 @@ class DeviceControlOutput(BaseModel):
     ir_protocols: str = ""
     ir_pending: int = 0
     ir_revision: int = 0
+    # Hora do servidor (segundos desde 1970): acerta o relógio do ESP32 onde o NTP é bloqueado.
+    server_time: int = 0
 
 
 def effective(room: Room, now: datetime) -> tuple[str, int | None, datetime | None]:
@@ -78,11 +80,15 @@ def effective(room: Room, now: datetime) -> tuple[str, int | None, datetime | No
     return room.ac_mode, room.ac_target, expires
 
 
-def outside_for(session: Session, room: Room, climate: ClimateService) -> OutsideOutput | None:
+def outside_for(
+    session: Session, room: Room, climate: ClimateService, wait: bool = True
+) -> OutsideOutput | None:
+    """Clima da cidade da unidade; com wait=False não espera a rede (resposta ao ESP32)."""
     unit = session.get(Unit, room.unit_id)
     if unit is None or unit.latitude is None or unit.longitude is None:
         return None
-    value = climate.outside(unit.latitude, unit.longitude)
+    read = climate.outside if wait else climate.outside_cached
+    value = read(unit.latitude, unit.longitude)
     if value is None:
         return None
     return OutsideOutput(
@@ -136,17 +142,13 @@ def create_control_router() -> APIRouter:
         room = get_room(session, device.room_id)
         now = datetime.now(UTC)
         mode, target, expires = effective(room, now)
-        outside = outside_for(session, room, climate)
-        active_btu = session.scalar(
-            select(func.coalesce(func.sum(AirConditioner.capacity_btu), 0)).where(
-                AirConditioner.room_id == room.id, AirConditioner.status == "ativo"
-            )
-        )
+        outside = outside_for(session, room, climate, wait=False)
         appliances = session.scalars(
             select(AirConditioner).where(
                 AirConditioner.room_id == room.id, AirConditioner.status == "ativo"
             )
         ).all()
+        active_btu = sum(item.capacity_btu for item in appliances)
         thermal = room_thermal(room.area_m2, room.ceiling_height_m, room.capacity, active_btu)
         return DeviceControlOutput(
             version=room.ac_version,
@@ -163,6 +165,7 @@ def create_control_router() -> APIRouter:
             ir_protocols=device_protocols(appliances),
             ir_pending=sum(not item.ir_protocol for item in appliances),
             ir_revision=room.ir_revision,
+            server_time=int(now.timestamp()),
         )
 
     return router
