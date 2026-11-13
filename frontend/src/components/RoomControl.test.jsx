@@ -7,6 +7,33 @@ const state = { control: { mode: "auto" }, loading: false, send: () => {} };
 const missing = { ac_state: "sem protocolo IR (rode IR_TESTE)", online: true };
 
 describe("Botão de protocolo na visão geral", () => {
+  it("oferece os dois emissores e mostra a configuração necessária no Xiaomi", () => {
+    const configured = {
+      ...state,
+      transport: {
+        transport: "xiaomi",
+        gateway_url: "http://10.0.0.4:8080/ac",
+        revision: 1,
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(RoomControl, {
+        state: configured,
+        device: missing,
+        isAdmin: true,
+      }),
+    );
+    expect(html).toContain("LED infravermelho do ESP32");
+    expect(html).toContain("Celular Xiaomi (POCO F7)");
+    expect(html).toContain("Tasker");
+    expect(html).toContain("Android IR Blaster");
+    expect(html).not.toContain("Enviar protocolo para o ESP32");
+    const teacher = renderToStaticMarkup(
+      createElement(RoomControl, { state: configured, isAdmin: false }),
+    );
+    expect(teacher).not.toContain("Salvar emissor");
+    expect(teacher).toContain("Um administrador pode trocar");
+  });
   it("aparece ao administrador quando o ESP32 está sem protocolo", () => {
     const html = renderToStaticMarkup(
       createElement(RoomControl, { state, device: missing, isAdmin: true }),

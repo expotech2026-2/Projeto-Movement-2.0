@@ -1,6 +1,25 @@
 # Estado atual
 
-Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **13/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+
+## Em desenvolvimento: escolha do emissor Xiaomi ou ESP32
+
+- Branch `feat/xiaomi-ir-gateway`, baseada em `perf/otimizar-site-e-firmware`
+  (`6b6beac`, PR #66): seleção por sala no site, migração
+  `0011_ir_transport` e firmware 2.6.0 com saída LED ou HTTP local para o POCO F7.
+- Sem Kotlin/Java: Tasker recebe `/ac` e o script em `hardware/xiaomi/` encaminha
+  sinais brutos ao Android IR Blaster. Guia em `docs/xiaomi-ir.md`.
+- A lógica automática continua no ESP32. Falhas do celular ficam pendentes sem
+  mudar para o LED; o diagnóstico distingue pedido aceito de recepção física.
+- Sem deploy do site ou gravação da placa. Faltam configurar o celular e validar
+  fisicamente os sinais no POCO F7/HyperOS e no ar-condicionado.
+- Em 13/11 o usuário confirmou que o POCO F7 controla os aparelhos pelo Mi Remote.
+  Isso não valida a automação Tasker/IR Blaster. Há 31 sinais Samsung candidatos
+  gerados com IRremoteESP8266 v2.9.0, conferidos por decodificação/checksum no
+  computador e disponíveis em `.ir` e JSON; ainda sem teste físico nesse modelo.
+- Integração local verificada: 146 testes de backend, 46 de frontend, 6 do gateway,
+  lint/build e lógica C++ aprovados. O Python no Windows ainda imprime exceções
+  nativas nos testes existentes de otimização; confirmar também no CI Linux.
 
 ## Em desenvolvimento: protocolo IR pelo cadastro
 

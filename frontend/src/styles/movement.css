@@ -2023,6 +2023,22 @@ td .text-button {
 .login-facts li {
   color: #ffffff;
 }
+
+.ir-transport {
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+.ir-transport label {
+  display: grid;
+  gap: var(--s-2);
+  flex: 1 1 240px;
+}
+.ir-transport input,
+.ir-transport select {
+  width: 100%;
+  min-width: 0;
+}
 .login-facts li {
   border-top-color: rgba(255, 255, 255, 0.35);
 }

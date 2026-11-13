@@ -5,6 +5,7 @@ import {
   clearSession,
   fetchReport,
   getSessionToken,
+  irTransport,
   login,
   regenerateDeviceToken,
   request,
@@ -12,6 +13,7 @@ import {
   roomControl,
   samplingPlan,
   setRoomControl,
+  setIrTransport,
   sendIrProtocol,
 } from "./movementApi";
 import { apiConfig } from "../config/api";
@@ -207,6 +209,35 @@ describe("API Movement", () => {
         headers: expect.objectContaining({
           "Content-Type": "application/json",
         }),
+      }),
+    );
+  });
+
+  it("consulta e salva o emissor por sala", async () => {
+    const configuration = {
+      transport: "xiaomi",
+      gateway_url: "http://10.0.0.4:8080/ac",
+    };
+    fetch.mockResolvedValue(
+      new Response(JSON.stringify({ ...configuration, revision: 2 }), {
+        status: 200,
+      }),
+    );
+    await irTransport("sala /1");
+    expect(fetch.mock.lastCall[0]).toBe(
+      `${apiConfig.baseUrl}/rooms/sala%20%2F1/ir-transport`,
+    );
+    fetch.mockResolvedValue(
+      new Response(JSON.stringify({ ...configuration, revision: 2 }), {
+        status: 200,
+      }),
+    );
+    await setIrTransport("sala /1", configuration);
+    expect(fetch).toHaveBeenLastCalledWith(
+      `${apiConfig.baseUrl}/rooms/sala%20%2F1/ir-transport`,
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify(configuration),
       }),
     );
   });

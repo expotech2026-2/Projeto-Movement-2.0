@@ -1,4 +1,9 @@
-# Firmware ESP32 2.5.4
+# Firmware ESP32 2.6.0
+
+Agora é possível escolher entre o LED do ESP32 e o emissor do POCO F7 pelo site
+ou pelos comandos `EMISSOR ESP32` / `EMISSOR XIAOMI` do monitor serial.
+O modo Xiaomi exige Tasker + Android IR Blaster e os sinais reais do ar;
+consulte [o guia completo](../../docs/xiaomi-ir.md). Inclua `ir_gateway.h` ao copiar a pasta.
 
 Esta pasta abre diretamente no Arduino IDE. O arquivo .ino tem o mesmo nome da pasta.
 As duas copias do firmware sao verificadas pelos testes do projeto.
@@ -31,7 +36,7 @@ esse estado para mandar a mensagem de ligar/desligar (Samsung) e alternar o turb
 Opcionais no config.h: MOVEMENT_DHT_EXTERNO 0 (sem o DHT de fora),
 MOVEMENT_BARREIRAS_INVERTIDAS 1 (barreira livre aparece cortada) e MOVEMENT_PINO_*.
 
-Para o equipamento real (2.5.4):
+Melhorias do equipamento real preservadas da versão 2.5.4:
 - A contagem de pessoas fica na memoria RTC e volta depois de um reinicio do ESP32
   (travamento, watchdog). Falta de energia ou o botao EN recomecam do zero.
 - Uma vez por dia, as 3 h de Brasilia, a sala e dada como vazia, para um erro de contagem
