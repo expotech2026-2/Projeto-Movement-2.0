@@ -30,15 +30,25 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.5.2";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.5.3";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
-const int pinBarreiraA = 13;   // barreira do lado de fora da porta
-const int pinBarreiraB = 26;   // barreira do lado de dentro; GPIO 12 é pino de partida (docs/fisica.md, 9.5)
-const int pinLED_IR   = 2;     // LED IR, pelo BC547, apontado para o ar-condicionado
+#ifndef MOVEMENT_PINO_BARREIRA_A
+#define MOVEMENT_PINO_BARREIRA_A 13   // barreira do lado de fora da porta
+#define MOVEMENT_PINO_BARREIRA_B 26   // lado de dentro; GPIO 12 é pino de partida (docs/fisica.md, 9.5)
+#define MOVEMENT_PINO_LED_IR     2    // LED IR, pelo BC547, apontado para o ar-condicionado
+#define MOVEMENT_PINO_DHT_SALA   27
+#define MOVEMENT_PINO_DHT_FORA   14
+#endif
+#ifndef MOVEMENT_DHT_EXTERNO
+#define MOVEMENT_DHT_EXTERNO 1   // 0 sem o DHT de fora: a temperatura externa vem do site
+#endif
+const int pinBarreiraA = MOVEMENT_PINO_BARREIRA_A;
+const int pinBarreiraB = MOVEMENT_PINO_BARREIRA_B;
+const int pinLED_IR   = MOVEMENT_PINO_LED_IR;
 
-#define DHTPIN_EXTERNO 14
-#define DHTPIN_INTERNO 27
+#define DHTPIN_EXTERNO MOVEMENT_PINO_DHT_FORA
+#define DHTPIN_INTERNO MOVEMENT_PINO_DHT_SALA
 #ifndef MOVEMENT_DHT_TYPE
 #define MOVEMENT_DHT_TYPE DHT22   // modelo do Wokwi; a montagem real usa DHT11 (config.h)
 #endif
@@ -85,6 +95,9 @@ int totalPessoas          = 0;
 
 // Porta com duas barreiras: o sentido vem da ordem dos cortes (docs/eletronica-digital.md).
 enum EstadoPorta { PORTA_LIVRE, ENTRANDO_A, ENTRANDO_AB, SAINDO_B, SAINDO_BA };
+#ifndef MOVEMENT_BARREIRAS_INVERTIDAS
+#define MOVEMENT_BARREIRAS_INVERTIDAS 0   // 1 se, com a porta livre, aparecer "A cortada"
+#endif
 EstadoPorta estadoPorta = PORTA_LIVRE;
 const unsigned long FILTRO_BARREIRA_MS = 30;   // o contato do relé oscila ao comutar
 int barreiraA = LOW, barreiraB = LOW;          // estado filtrado: HIGH = feixe interrompido
@@ -144,6 +157,9 @@ std::vector<int> modelosSala;
 int quantidadeProtocolos = 0;
 decode_type_t protocoloAC = decode_type_t::UNKNOWN;   // UNKNOWN = sem protocolo: nada é enviado
 decode_type_t protocoloLocal = decode_type_t::UNKNOWN;   // IR <nome>: vale se o site não tiver nenhum
+// Último estado enviado a cada protocolo: o IRac compara com ele para ligar, desligar e o turbo.
+struct EstadoIR { decode_type_t protocolo; int modelo; stdAc::state_t ultimo; };
+std::vector<EstadoIR> estadosIR;
 bool forcarEnvioIR = false;                           // reenvia o estado atual uma vez
 bool repetirQuadroIR = false;                         // confirmação do último quadro
 unsigned long ultimoQuadroIR = 0;
@@ -170,10 +186,11 @@ void setup() {
   pinMode(pinLED_IR,  OUTPUT);
   digitalWrite(pinLED_IR, LOW);
 
-  dhtExterno.begin();
+  if (MOVEMENT_DHT_EXTERNO) dhtExterno.begin();
   dhtInterno.begin();
 
   Serial.println(F("\n=== SMART AC CONTROLLER (Auto + Manual) ==="));
+  avisarConfiguracao();
   // A porta roda numa tarefa própria no núcleo 0, então um envio HTTP lento não perde passagens.
   filaPorta = xQueueCreate(16, sizeof(int));
   xTaskCreatePinnedToCore(tarefaPorta, "porta", 4096, nullptr, 1, nullptr, 0);
@@ -186,6 +203,16 @@ void setup() {
   ultimaConsultaControle = millis();
   atualizarAutomatico();
   Serial.println(F("Sistema pronto. Modo inicial: AUTOMATICO\n"));
+}
+
+// Mostra no monitor serial o que ainda falta configurar.
+void avisarConfiguracao() {
+  if (String(MOVEMENT_WIFI_SSID).startsWith("PREENCHA"))
+    Serial.println(F("[CONFIG] Falta a rede Wi-Fi (MOVEMENT_WIFI_SSID e MOVEMENT_WIFI_PASSWORD)."));
+  if (String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE")
+    Serial.println(F("[CONFIG] Falta o token do ESP32 (MOVEMENT_DEVICE_TOKEN): nada sera enviado ao site."));
+  if (String(MOVEMENT_API_URL).startsWith("https://") && String(MOVEMENT_CA_CERT).isEmpty())
+    Serial.println(F("[CONFIG] Endereco https sem certificado (MOVEMENT_CA_CERT): nada sera enviado ao site."));
 }
 
 // ── WiFi ────────────────────────────────────────────────────────────────────
@@ -436,12 +463,12 @@ void verificarTimeoutManual() {
 
 // ── Leitura dos DHTs ───────────────────────────────────────────────────────
 void lerClima() {
-  float tExt = dhtExterno.readTemperature();
+  float tExt = MOVEMENT_DHT_EXTERNO ? dhtExterno.readTemperature() : NAN;
   float tInt = dhtInterno.readTemperature();
-  float hExt = dhtExterno.readHumidity();
+  float hExt = MOVEMENT_DHT_EXTERNO ? dhtExterno.readHumidity() : NAN;
   float hInt = dhtInterno.readHumidity();
   falhaDhtInterno = isnan(tInt) || isnan(hInt);
-  falhaDhtExterno = isnan(tExt) || isnan(hExt);
+  falhaDhtExterno = MOVEMENT_DHT_EXTERNO && (isnan(tExt) || isnan(hExt));
 
   // O sensor externo só vale quando o site não tem a temperatura da cidade.
   if (!isnan(tExt) && !externaDoSite) tempExternaAtual = tExt;
@@ -655,6 +682,8 @@ void consultarControle() {
   cabecalhosMovement(http);
   int code = http.GET();
   if (code == 200) aplicarControle(http.getString());
+  else if (code == 401)
+    Serial.println(F("[SITE] Token recusado (HTTP 401): gere outro token na pagina da sala e troque no ESP32."));
   else Serial.printf("[SITE] comando indisponivel (HTTP %d)\n", code);
   http.end();
 }
@@ -693,18 +722,43 @@ void aplicarProtocolosSite(const String& configuracao, long revisao = 0) {
 }
 
 // Manda o estado inteiro (ligado em frio no alvo, ou desligado) no protocolo informado.
-bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo, bool forte, int modelo = 0) {
-  arCondicionado.next.protocol = protocolo;
-  // LG e LG2 só diferem pelo modelo do controle (AKB75215403 = LG2); nos outros vale o primeiro.
-  arCondicionado.next.model    = modelo > 0 ? modelo : (protocolo == decode_type_t::LG2 ? 2 : 1);
-  arCondicionado.next.power    = ligado;
-  arCondicionado.next.mode     = stdAc::opmode_t::kCool;
-  arCondicionado.next.celsius  = true;
-  arCondicionado.next.degrees  = alvo;
+// LG e LG2 só diferem pelo modelo do controle (AKB75215403 = LG2); nos outros vale o primeiro.
+int modeloIR(decode_type_t protocolo, int modelo) {
+  return modelo > 0 ? modelo : (protocolo == decode_type_t::LG2 ? 2 : 1);
+}
+
+// Estado já enviado a este protocolo; um protocolo novo começa como aparelho desligado.
+stdAc::state_t* ultimoEstadoIR(decode_type_t protocolo, int modelo) {
+  modelo = modeloIR(protocolo, modelo);
+  for (EstadoIR& item : estadosIR)
+    if (item.protocolo == protocolo && item.modelo == modelo) return &item.ultimo;
+  EstadoIR novo;
+  novo.protocolo = protocolo;
+  novo.modelo = modelo;
+  IRac::initState(&novo.ultimo);
+  novo.ultimo.protocol = protocolo;
+  novo.ultimo.model = modelo;
+  estadosIR.push_back(novo);
+  return &estadosIR.back().ultimo;
+}
+
+// Sem anterior (IR_TESTE), o quadro sai completo; com ele, ligar/desligar e turbo seguem o aparelho.
+bool enviarEstadoIR(decode_type_t protocolo, bool ligado, int alvo, bool forte, int modelo = 0,
+                    stdAc::state_t* anterior = nullptr) {
+  stdAc::state_t estado;
+  IRac::initState(&estado);
+  estado.protocol = protocolo;
+  estado.model    = modeloIR(protocolo, modelo);
+  estado.power    = ligado;
+  estado.mode     = stdAc::opmode_t::kCool;
+  estado.celsius  = true;
+  estado.degrees  = alvo;
   // Partida forte: ventilação no máximo e turbo, nos protocolos que têm turbo.
-  arCondicionado.next.fanspeed = forte ? stdAc::fanspeed_t::kMax : stdAc::fanspeed_t::kAuto;
-  arCondicionado.next.turbo    = forte;
-  return arCondicionado.sendAc();
+  estado.fanspeed = forte ? stdAc::fanspeed_t::kMax : stdAc::fanspeed_t::kAuto;
+  estado.turbo    = forte;
+  bool enviado = arCondicionado.sendAc(estado, anterior);
+  if (enviado && anterior) *anterior = estado;
+  return enviado;
 }
 
 // Escolhe o protocolo pelo nome (GREE, LG2, SAMSUNG_AC...); salvar grava na flash.
@@ -754,6 +808,7 @@ void testarProtocolosIR() {
       if (Serial.available()) {
         Serial.readStringUntil('\n');
         Serial.println(F("[IR] Teste interrompido."));
+        estadosIR.clear();
         forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;
         return;
       }
@@ -762,6 +817,7 @@ void testarProtocolosIR() {
     delay(1500);
   }
   Serial.println(F("[IR] Fim do teste. Grave o protocolo que funcionou com IR <nome>, ex.: IR GREE."));
+  estadosIR.clear();
   forcarEnvioIR = protocoloAC != decode_type_t::UNKNOWN;
 }
 
@@ -783,8 +839,10 @@ void processarComandosIR() {
   bool enviado = false;
   if (quantidadeProtocolos > 0) {
     for (int i = 0; i < quantidadeProtocolos; i++)
-      enviado = enviarEstadoIR(protocolosSala[i], ligadoEnviado, alvoEnviado, forteEnviado, modelosSala[i]) || enviado;
-  } else enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado);
+      enviado = enviarEstadoIR(protocolosSala[i], ligadoEnviado, alvoEnviado, forteEnviado, modelosSala[i],
+                               ultimoEstadoIR(protocolosSala[i], modelosSala[i])) || enviado;
+  } else enviado = enviarEstadoIR(protocoloAC, ligadoEnviado, alvoEnviado, forteEnviado, 0,
+                                  ultimoEstadoIR(protocoloAC, 0));
   Serial.printf("[IR] %s: %s em %d C%s%s%s\n", typeToString(protocoloAC).c_str(),
                 ligadoEnviado ? "LIGAR" : "DESLIGAR", alvoEnviado,
                 forteEnviado ? ", ventilacao maxima" : "", repetir ? " (repeticao)" : "",
@@ -799,7 +857,7 @@ void exibirTotal(const char* acao) {
 
 // Aceita a leitura do pino só depois de FILTRO_BARREIRA_MS estável; devolve true se mudou.
 bool filtrarBarreira(int pino, int& estavel, int& bruta, unsigned long& desde, unsigned long agora) {
-  int lida = digitalRead(pino);
+  int lida = digitalRead(pino) ^ MOVEMENT_BARREIRAS_INVERTIDAS;
   if (lida != bruta) { bruta = lida; desde = agora; }
   if (bruta == estavel || agora - desde < FILTRO_BARREIRA_MS) return false;
   estavel = bruta;
