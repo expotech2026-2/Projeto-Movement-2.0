@@ -1,4 +1,4 @@
-# Firmware ESP32 2.5.1
+# Firmware ESP32 2.5.2
 
 Esta pasta abre diretamente no Arduino IDE. O arquivo .ino tem o mesmo nome da pasta.
 As duas copias do firmware sao verificadas pelos testes do projeto.

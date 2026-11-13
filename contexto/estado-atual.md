@@ -7,6 +7,9 @@ Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 - Branch `fix/protocolo-ir-cadastro-ar`: cadastro salva protocolo e variante por aparelho,
   e `GET /devices/me/control` envia os pares distintos dos aparelhos ativos da sala do token.
 - Migração `0009_appliance_ir`: preenche cadastros existentes pela marca + modelo exatos.
+- Migração `0010_ir_brand_candidate`: sem modelo exato, protocolo candidato pela marca;
+  só 1 dos 1.507 modelos do Inmetro tinha correspondência exata.
+- Firmware 2.5.2: com a lista do site vazia, usa o protocolo gravado por `IR <nome>`.
 - Auditoria somente leitura encontrou 3 Samsung AR24BVFAAWKNAZ em produção e 1 em teste.
   `SAMSUNG_AC` está registrado como candidato por família, sem confirmação nesse modelo.
 - Firmware 2.5.1 aplica a configuração mesmo sem mudar a versão do comando do professor;

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.climate import UF_BY_NAME, ClimateService, ClimateUnavailable, split_city
 from app.dependencies import Climate, Db, require_admin, require_user
 from app.device_status import is_online
-from app.ir_protocols import lookup
+from app.ir_protocols import brand_candidate, lookup
 from app.models import DEFAULT_UNIT_ID, DEFAULT_UNIT_NAME, AirConditioner, Device, Room, Unit
 from app.retention import monthly_history
 from app.security import hash_device_token
@@ -114,6 +114,7 @@ def resolve_appliance_ir(appliance: AirConditioner) -> None:
             else "manual"
         )
         return
+    match = match or brand_candidate(appliance.brand)
     appliance.ir_protocol = match["protocol"] if match else None
     appliance.ir_model = match["ir_model"] if match else 1
     appliance.ir_source = match["confidence"] if match else "pending"

@@ -90,6 +90,7 @@ std::vector<decode_type_t> protocolosSala;
 std::vector<int> modelosSala;
 int quantidadeProtocolos = 0;
 decode_type_t protocoloAC = decode_type_t::UNKNOWN;
+decode_type_t protocoloLocal = decode_type_t::UNKNOWN;
 decode_type_t strToDecodeType(const char* name) {
   std::string value(name);
   if (value == "GREE") return decode_type_t::GREE;
@@ -153,6 +154,11 @@ int main() {
   if (forcarEnvioIR) falhas++;
   aplicarControle(String("{\"version\":5,\"ir_protocols\":\"\"}"));
   if (quantidadeProtocolos != 0 || protocoloAC != decode_type_t::UNKNOWN) falhas++;
+  // Sem protocolo no site, vale o gravado no ESP32 pelo comando IR <nome>.
+  protocoloLocal = decode_type_t::GREE;
+  aplicarControle(String("{\"version\":5,\"ir_protocols\":\"\",\"ir_revision\":9}"));
+  if (quantidadeProtocolos != 0 || protocoloAC != decode_type_t::GREE || !forcarEnvioIR) falhas++;
+  protocoloLocal = decode_type_t::UNKNOWN;
   aplicarProtocolosSite(String("INVALIDO:1,GREE:0,LG2:7"));
   if (quantidadeProtocolos != 0) falhas++;
   aplicarControle(String("{\"version\":5,\"ir_protocols\":\"SAMSUNG_AC:1\",\"ir_revision\":1}"));
