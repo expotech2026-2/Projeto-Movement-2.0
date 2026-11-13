@@ -55,6 +55,10 @@ def main() -> int:
         print(f"FALHA: {ARDUINO.name} difere do sketch.ino; copie o sketch.ino para lá")
         return 1
     print("OK: a pasta do Arduino tem o mesmo firmware do sketch.ino")
+    gateway_header = SKETCH.with_name("ir_gateway.h").read_text(encoding="utf-8")
+    if ARDUINO.with_name("ir_gateway.h").read_text(encoding="utf-8") != gateway_header:
+        print("FALHA: ir_gateway.h difere entre as pastas do firmware")
+        return 1
     porta = {
         "porta_globais.inc": extract(
             text, "enum EstadoPorta", "unsigned long desdeA = 0, desdeB = 0;"
@@ -100,10 +104,15 @@ def main() -> int:
         )
         + "}\n",
         "casos.inc": button_cases(),
+        "zerar.inc": extract(text, "// Devolve true uma vez por dia", "  return true;") + "}\n",
+        "ir_gateway.h": gateway_header,
+        "emissor.inc": extract(text, "// Seleção do emissor", "  revisaoEmissorSite = revisao;")
+        + "}\n",
         "protocolos.inc": extract(
             text,
             "// A API envia pares",
-            '  Serial.printf("[IR] Configuracao da sala recebida: %d protocolos\\n", quantidadeProtocolos);',
+            '  Serial.printf("[IR] Configuracao da sala recebida: %d protocolos\\n", '
+            "quantidadeProtocolos);",
         )
         + "}\n",
     }
@@ -114,6 +123,32 @@ def main() -> int:
             or run_test(build, "teste_ir", ir)
             or run_test(build, "teste_conforto", conforto)
             or run_test(build, "teste_controle", controle)
+            or run_test(build, "teste_gateway", {"ir_gateway.h": gateway_header})
+            or run_test(
+                build,
+                "teste_transporte",
+                {
+                    "ir_gateway.h": gateway_header,
+                    "json.inc": extract(
+                        text,
+                        "// Valor de um campo do JSON plano",
+                        '  return valor == "null" ? "" : valor;',
+                    )
+                    + "}\n",
+                    "gateway_sender.inc": extract(
+                        text,
+                        "// O Tasker aceita o pedido",
+                        '  Serial.println("[Xiaomi] " + estadoXiaomi);',
+                    )
+                    + "}\n",
+                    "ir_dispatch.inc": extract(
+                        text,
+                        "// Manda um quadro quando",
+                        '                enviado ? "" : " (falhou)");',
+                    )
+                    + "}\n",
+                },
+            )
         )
 
 

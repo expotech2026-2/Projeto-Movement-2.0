@@ -41,6 +41,7 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: node --test ../hardware/xiaomi/tasker-gateway.test.mjs
   firmware:
     runs-on: ubuntu-latest
     steps:

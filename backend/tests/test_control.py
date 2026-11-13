@@ -28,6 +28,8 @@ class FakeClimate:
         assert (latitude, longitude) == (-22.9056, -47.0608)
         return Outside(31.5, 48.0, "OpenWeatherMap")
 
+    outside_cached = outside
+
 
 @pytest.fixture
 def climate(context):
@@ -63,6 +65,7 @@ def test_professor_sets_manual_temperature_and_device_receives_it(context, clima
 
 SITE_BUTTONS = Path(__file__).parents[2] / "hardware" / "logica" / "controle_site.json"
 REMAINING = re.compile(r'"remaining_seconds":(\d+)')
+CLOCK = re.compile(r'"(remaining_seconds|server_time)":\d+')
 
 
 def test_site_buttons_reach_the_device_as_the_firmware_expects(context, climate):
@@ -78,7 +81,7 @@ def test_site_buttons_reach_the_device_as_the_firmware_expects(context, climate)
         received = int(REMAINING.search(text).group(1))
         expected = int(REMAINING.search(case["resposta"]).group(1))
         assert abs(received - expected) <= 20, case["botao"]
-        assert REMAINING.sub("", text) == REMAINING.sub("", case["resposta"]), case["botao"]
+        assert CLOCK.sub("", text) == CLOCK.sub("", case["resposta"]), case["botao"]
 
 
 def test_room_computers_and_volume_reach_the_device(context, climate):

@@ -8,10 +8,12 @@
 #include <Preferences.h>
 #include <esp_system.h>
 #include <time.h>
+#include <sys/time.h>
 #include "DHT.h"
 #include <IRremoteESP8266.h>
 #include <IRac.h>
 #include <IRutils.h>
+#include "ir_gateway.h"
 
 #if __has_include("config.h")
 #include "config.h"
@@ -28,9 +30,18 @@
 #ifndef MOVEMENT_AC_PROTOCOLO
 #define MOVEMENT_AC_PROTOCOLO ""   // vazio = nada é enviado até gravar o protocolo (IR_TESTE)
 #endif
+#ifndef MOVEMENT_IR_TRANSPORT
+#define MOVEMENT_IR_TRANSPORT "esp32"
+#endif
+#ifndef MOVEMENT_XIAOMI_URL
+#define MOVEMENT_XIAOMI_URL ""
+#endif
+#ifndef MOVEMENT_XIAOMI_KEY
+#define MOVEMENT_XIAOMI_KEY ""
+#endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.5.3";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.6.0";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 #ifndef MOVEMENT_PINO_BARREIRA_A
@@ -92,6 +103,17 @@ unsigned long duracaoManual    = MANUAL_TIMEOUT_MS;   // o site manda o tempo qu
 
 // ── Estados ────────────────────────────────────────────────────────────────
 int totalPessoas          = 0;
+// A contagem fica na memória RTC: sobrevive a um reinício do ESP32 (travamento, watchdog),
+// mas não à falta de energia nem ao botão EN, que recomeçam do zero.
+RTC_NOINIT_ATTR int pessoasGuardadas;
+RTC_NOINIT_ATTR uint32_t marcaPessoas;
+const uint32_t MARCA_PESSOAS = 0x4D4F5632;
+// Erros de contagem na porta se acumulam e deixariam o ar ligado numa sala vazia: uma vez
+// por dia, nesta hora (Brasília), a sala é dada como vazia. -1 desliga.
+#ifndef MOVEMENT_HORA_ZERAR
+#define MOVEMENT_HORA_ZERAR 3
+#endif
+long diaZerado = -1;
 
 // Porta com duas barreiras: o sentido vem da ordem dos cortes (docs/eletronica-digital.md).
 enum EstadoPorta { PORTA_LIVRE, ENTRANDO_A, ENTRANDO_AB, SAINDO_B, SAINDO_BA };
@@ -166,6 +188,12 @@ unsigned long ultimoQuadroIR = 0;
 const unsigned long INTERVALO_MIN_IR = 1000;          // junta mudanças rápidas num só quadro
 const unsigned long REPETICAO_IR_MS  = 2000;          // repete o quadro, caso o aparelho não o pegue
 Preferences preferencias;
+String emissorIR = MOVEMENT_IR_TRANSPORT;
+String enderecoXiaomi = MOVEMENT_XIAOMI_URL;
+String estadoXiaomi = "aguardando envio";
+String idComandoXiaomi;
+long revisaoEmissorSite = -1;
+GatewayQueue filaXiaomi;
 // Protocolos das marcas mais comuns no Brasil, na ordem do IR_TESTE (contexto/hardware.md).
 const decode_type_t PROTOCOLOS_TESTE[] = {
   decode_type_t::LG2,          decode_type_t::LG,           decode_type_t::SAMSUNG_AC,
@@ -194,7 +222,10 @@ void setup() {
   // A porta roda numa tarefa própria no núcleo 0, então um envio HTTP lento não perde passagens.
   filaPorta = xQueueCreate(16, sizeof(int));
   xTaskCreatePinnedToCore(tarefaPorta, "porta", 4096, nullptr, 1, nullptr, 0);
+  recuperarPessoas();
+  movementPendingPayload.reserve(320);
   carregarProtocoloIR();
+  carregarEmissorIR();
   conectarWiFi();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   atualizarIntervalo();
@@ -377,11 +408,24 @@ void entrarManual(unsigned long duracaoMs) {
 // AUTO, MANUAL, AC_ON, AC_OFF, TEMP+, TEMP-, a temperatura alvo (16 a 30), IR <protocolo> ou IR_TESTE.
 void processarComandoManual(String cmd) {
   cmd.trim();
+  String original = cmd;
   cmd.toUpperCase();
   if (cmd.isEmpty()) return;
   Serial.println("[Manual] Comando recebido: " + cmd);
 
-  if (cmd == "IR_TESTE") { testarProtocolosIR(); return; }
+  if (cmd == "EMISSOR ESP32") { definirEmissorIR("esp32", enderecoXiaomi, true); return; }
+  if (cmd == "EMISSOR XIAOMI") { definirEmissorIR("xiaomi", enderecoXiaomi, true); return; }
+  if (cmd.startsWith("XIAOMI_URL ")) {
+    String url = original.substring(11);
+    if (validGatewayUrl(url.c_str())) definirEmissorIR(emissorIR, url, true);
+    else Serial.println(F("[Xiaomi] Use http://IP_LOCAL:8080/ac."));
+    return;
+  }
+  if (cmd == "IR_TESTE") {
+    if (emissorIR == "xiaomi") Serial.println(F("[IR] IR_TESTE usa o LED; selecione EMISSOR ESP32 antes."));
+    else testarProtocolosIR();
+    return;
+  }
   if (cmd.startsWith("IR ")) { definirProtocoloIR(cmd.substring(3), true); return; }
 
   if (cmd == "AUTO" || cmd == "AUTOMATICO" || cmd == "MANUAL_OFF") {
@@ -521,6 +565,7 @@ bool abrirMovement(HTTPClient& http, WiFiClient& plain, WiFiClientSecure& secure
   if (url.startsWith("https://")) {
     if (String(MOVEMENT_CA_CERT).isEmpty()) return false;
     secure.setCACert(MOVEMENT_CA_CERT);
+    secure.setHandshakeTimeout(8);   // segundos; o padrão é 120 e prenderia o loop()
     return http.begin(secure, url);
   }
   return http.begin(plain, url);
@@ -536,6 +581,10 @@ void cabecalhosMovement(HTTPClient& http) {
   if (falhaDhtInterno) falhas = "DHT da sala (GPIO 27)";
   if (falhaDhtExterno) falhas += String(falhas.isEmpty() ? "" : ", ") + "DHT externo (GPIO 14)";
   http.addHeader("X-Movement-Sensors", falhas.isEmpty() ? "ok" : falhas);
+  if (emissorIR == "xiaomi") {
+    http.addHeader("X-Movement-AC", "Xiaomi: " + estadoXiaomi);
+    return;
+  }
   if (protocoloAC == decode_type_t::UNKNOWN) {
     http.addHeader("X-Movement-AC", "sem protocolo IR (rode IR_TESTE)");
     return;
@@ -576,7 +625,9 @@ void enviarMovement() {
   unsigned long inicioEnvio = millis();
   int code = http.POST(movementPendingPayload);
   Serial.printf("[Movement] HTTP %d em %lu ms\n", code, millis() - inicioEnvio);
-  if (code == 200 || code == 201 || code == 422) movementPendingPayload = "";
+  // Recusa definitiva (4xx que não é token, espera ou excesso de pedidos): reenviar não adianta.
+  bool recusada = code >= 400 && code < 500 && code != 401 && code != 408 && code != 429;
+  if (code == 200 || code == 201 || recusada) movementPendingPayload = "";
   http.end();
 }
 
@@ -614,6 +665,7 @@ String campoJson(const String& corpo, const char* nome) {
   int i = corpo.indexOf(chave);
   if (i < 0) return "";
   i += chave.length();
+  while (corpo.charAt(i) == ' ' || corpo.charAt(i) == '\n' || corpo.charAt(i) == '\r') i++;
   if (corpo.charAt(i) == '"') {
     int fim = corpo.indexOf('"', i + 1);
     return fim < 0 ? "" : corpo.substring(i + 1, fim);
@@ -625,8 +677,15 @@ String campoJson(const String& corpo, const char* nome) {
   return valor == "null" ? "" : valor;
 }
 
+// Hora do site em segundos desde 1970; 0 se a resposta não trouxer uma hora válida.
+long horaDoSite(const String& corpo) {
+  long hora = campoJson(corpo, "server_time").toInt();
+  return hora > 1700000000L ? hora : 0;
+}
+
 // Aplica cada comando do site uma vez (pela versão) e guarda a temperatura externa da cidade.
 void aplicarControle(const String& corpo) {
+  aplicarEmissorSite(corpo);
   if (corpo.indexOf("\"ir_protocols\":") >= 0)
     aplicarProtocolosSite(campoJson(corpo, "ir_protocols"), campoJson(corpo, "ir_revision").toInt());
   String tExt = campoJson(corpo, "temp_outside");
@@ -664,9 +723,101 @@ void aplicarControle(const String& corpo) {
   else definirAlvoAC(campoJson(corpo, "target").toFloat(), "SITE (professor)");
 }
 
+// Seleção do emissor: uma nova revisão do site prevalece sobre a escolha local.
+void definirEmissorIR(String emissor, const String& url, bool salvar) {
+  if (emissor != "esp32" && emissor != "xiaomi") return;
+  if (emissorIR != emissor) estadosIR.clear();
+  emissorIR = emissor;
+  if (!url.isEmpty()) enderecoXiaomi = url;
+  filaXiaomi = GatewayQueue();
+  estadoXiaomi = "aguardando envio";
+  forcarEnvioIR = true;
+  repetirQuadroIR = false;
+  if (salvar) {
+    preferencias.begin("movement", false);
+    preferencias.putString("ir_emitter", emissorIR);
+    preferencias.putString("ir_gateway", enderecoXiaomi);
+    preferencias.end();
+  }
+  Serial.println("[IR] Emissor selecionado: " + emissorIR);
+}
+
+void carregarEmissorIR() {
+  preferencias.begin("movement", true);
+  String emissor = preferencias.getString("ir_emitter", MOVEMENT_IR_TRANSPORT);
+  String url = preferencias.getString("ir_gateway", MOVEMENT_XIAOMI_URL);
+  preferencias.end();
+  definirEmissorIR(emissor, url, false);
+}
+
+void aplicarEmissorSite(const String& corpo) {
+  String emissor = campoJson(corpo, "ir_transport");
+  long revisao = campoJson(corpo, "ir_transport_revision").toInt();
+  if (emissor.isEmpty() || revisao <= 0 || revisao == revisaoEmissorSite) return;
+  if (emissor != "esp32" && emissor != "xiaomi") return;
+  definirEmissorIR(emissor, campoJson(corpo, "ir_gateway_url"), true);
+  revisaoEmissorSite = revisao;
+}
+
+// O Tasker aceita o pedido; isso não confirma transmissão nem recepção pelo aparelho.
+void processarComandosXiaomi() {
+  if (filaXiaomi.update(acDeveFicarLigado(), (int)tempAlvoAC, ventilacaoForte, forcarEnvioIR)) {
+    idComandoXiaomi = movementMessageId();
+    estadoXiaomi = "pedido pendente";
+  }
+  forcarEnvioIR = false;
+  repetirQuadroIR = false;
+  if (!filaXiaomi.pending) return;
+  if (!validGatewayUrl(enderecoXiaomi.c_str())) {
+    estadoXiaomi = "configure o endereco local";
+    return;
+  }
+  if (!validGatewayKey(MOVEMENT_XIAOMI_KEY)) {
+    estadoXiaomi = "configure a chave privada no Arduino";
+    return;
+  }
+  if (WiFi.status() != WL_CONNECTED) { estadoXiaomi = "sem Wi-Fi, pedido pendente"; return; }
+  unsigned long agora = millis();
+  if (!filaXiaomi.ready(agora)) return;
+  HTTPClient http;
+  WiFiClient client;
+  http.setConnectTimeout(1000);
+  http.setTimeout(3000);
+  bool aceito = false;
+  int code = -1;
+  if (http.begin(client, enderecoXiaomi)) {
+    http.addHeader("Content-Type", "application/json");
+    String corpo = "{\"id\":\"" + idComandoXiaomi + "\",\"key\":\"" + String(MOVEMENT_XIAOMI_KEY);
+    corpo += String("\",\"power\":") + (filaXiaomi.power ? "true" : "false");
+    corpo += ",\"temperature\":" + String(filaXiaomi.target);
+    corpo += String(",\"mode\":\"cool\",\"fan\":\"") + (filaXiaomi.strong ? "max" : "auto") + "\"}";
+    code = http.POST(corpo);
+    aceito = code == 202 && campoJson(http.getString(), "accepted") == "true";
+  }
+  http.end();
+  filaXiaomi.finish(millis(), aceito);
+  if (aceito) {
+    ligadoEnviado = filaXiaomi.power;
+    alvoEnviado = filaXiaomi.target;
+    forteEnviado = filaXiaomi.strong;
+    estadoXiaomi = String("pedido aceito: ") + (ligadoEnviado ? "ligar " + String(alvoEnviado) + " C" : "desligar");
+  } else estadoXiaomi = "falha HTTP " + String(code) + ", pedido pendente";
+  Serial.println("[Xiaomi] " + estadoXiaomi);
+}
+
 // Sala ocupada ou em manual: consulta a cada 15 s; vazia, a cada 1 min (gasta menos energia).
 unsigned long intervaloControle() {
   return totalPessoas > 0 || modoAtual == MODO_MANUAL ? 15000UL : 60000UL;
+}
+
+// Onde a rede bloqueia o NTP, o relógio é acertado pela hora que o site manda.
+void acertarRelogio(const String& corpo) {
+  if (time(nullptr) >= 1700000000) return;
+  long hora = horaDoSite(corpo);
+  if (hora == 0) return;
+  struct timeval agora = { (time_t)hora, 0 };
+  settimeofday(&agora, nullptr);
+  Serial.println(F("[Movement] Relogio acertado pela hora do site (NTP sem resposta)."));
 }
 
 void consultarControle() {
@@ -681,7 +832,11 @@ void consultarControle() {
   http.setTimeout(5000);
   cabecalhosMovement(http);
   int code = http.GET();
-  if (code == 200) aplicarControle(http.getString());
+  if (code == 200) {
+    String corpo = http.getString();
+    acertarRelogio(corpo);
+    aplicarControle(corpo);
+  }
   else if (code == 401)
     Serial.println(F("[SITE] Token recusado (HTTP 401): gere outro token na pagina da sala e troque no ESP32."));
   else Serial.printf("[SITE] comando indisponivel (HTTP %d)\n", code);
@@ -823,6 +978,7 @@ void testarProtocolosIR() {
 
 // Manda um quadro quando o estado muda e o repete uma vez 2 s depois; sem protocolo, só avisa.
 void processarComandosIR() {
+  if (emissorIR == "xiaomi") { processarComandosXiaomi(); return; }
   unsigned long agora = millis();
   if (agora - ultimoQuadroIR < INTERVALO_MIN_IR) return;
   if (protocoloAC == decode_type_t::UNKNOWN) {
@@ -853,6 +1009,33 @@ void processarComandosIR() {
 void exibirTotal(const char* acao) {
   Serial.print(F("\n[PRESENCA] ")); Serial.print(acao);
   Serial.print(F("  Total: ")); Serial.println(totalPessoas);
+}
+
+// Devolve true uma vez por dia, na hora de zerar; agora em segundos desde 1970 (UTC).
+bool horaDeZerar(long agora, long& ultimoDia, int hora) {
+  if (hora < 0 || agora < 1700000000L) return false;
+  long local = agora - 3L * 3600L;   // Brasília: UTC-3, sem horário de verão
+  long dia = local / 86400L;
+  if ((local % 86400L) / 3600L != hora || dia == ultimoDia) return false;
+  ultimoDia = dia;
+  return true;
+}
+
+void guardarPessoas() {
+  pessoasGuardadas = totalPessoas;
+  marcaPessoas = MARCA_PESSOAS;
+}
+
+// Depois de um reinício sem falta de energia, retoma a contagem que estava na memória RTC.
+void recuperarPessoas() {
+  esp_reset_reason_t motivo = esp_reset_reason();
+  bool reinicio = motivo == ESP_RST_SW || motivo == ESP_RST_PANIC || motivo == ESP_RST_INT_WDT ||
+                  motivo == ESP_RST_TASK_WDT || motivo == ESP_RST_WDT;
+  if (reinicio && marcaPessoas == MARCA_PESSOAS && pessoasGuardadas > 0 && pessoasGuardadas <= 10000) {
+    totalPessoas = pessoasGuardadas;
+    Serial.printf("[PRESENCA] Reinicio sem falta de energia: contagem recuperada (%d)\n", totalPessoas);
+  }
+  guardarPessoas();
 }
 
 // Aceita a leitura do pino só depois de FILTRO_BARREIRA_MS estável; devolve true se mudou.
@@ -918,7 +1101,16 @@ void loop() {
       Serial.println(F("Aviso: sala vazia."));
       continue;
     }
+    guardarPessoas();
     atualizarAutomatico();   // só age se estiver em AUTOMATICO
+  }
+
+  // 1b) Contagem zerada uma vez por dia, de madrugada
+  if (horaDeZerar((long)time(nullptr), diaZerado, MOVEMENT_HORA_ZERAR) && totalPessoas > 0) {
+    totalPessoas = 0;
+    guardarPessoas();
+    exibirTotal("ZERADA (rotina da madrugada)");
+    atualizarAutomatico();
   }
 
   // 2) Leitura DHT

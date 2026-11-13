@@ -1,6 +1,25 @@
 # Estado atual
 
-Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **13/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+
+## Em desenvolvimento: escolha do emissor Xiaomi ou ESP32
+
+- Branch `feat/xiaomi-ir-gateway`, baseada em `perf/otimizar-site-e-firmware`
+  (`6b6beac`, PR #66): seleção por sala no site, migração
+  `0011_ir_transport` e firmware 2.6.0 com saída LED ou HTTP local para o POCO F7.
+- Sem Kotlin/Java: Tasker recebe `/ac` e o script em `hardware/xiaomi/` encaminha
+  sinais brutos ao Android IR Blaster. Guia em `docs/xiaomi-ir.md`.
+- A lógica automática continua no ESP32. Falhas do celular ficam pendentes sem
+  mudar para o LED; o diagnóstico distingue pedido aceito de recepção física.
+- Sem deploy do site ou gravação da placa. Faltam configurar o celular e validar
+  fisicamente os sinais no POCO F7/HyperOS e no ar-condicionado.
+- Em 13/11 o usuário confirmou que o POCO F7 controla os aparelhos pelo Mi Remote.
+  Isso não valida a automação Tasker/IR Blaster. Há 31 sinais Samsung candidatos
+  gerados com IRremoteESP8266 v2.9.0, conferidos por decodificação/checksum no
+  computador e disponíveis em `.ir` e JSON; ainda sem teste físico nesse modelo.
+- Integração local verificada: 146 testes de backend, 46 de frontend, 6 do gateway,
+  lint/build e lógica C++ aprovados. O Python no Windows ainda imprime exceções
+  nativas nos testes existentes de otimização; confirmar também no CI Linux.
 
 ## Em desenvolvimento: protocolo IR pelo cadastro
 
@@ -12,6 +31,11 @@ Atualizado em **12/11/2026**. Atualize este arquivo e a data ao terminar uma tar
 - Firmware 2.5.2: com a lista do site vazia, usa o protocolo gravado por `IR <nome>`.
 - Firmware 2.5.3: último estado IR guardado por protocolo (liga/desliga Samsung e turbo
   Midea/Coolix corretos com vários protocolos e depois do IR_TESTE); DHT externo opcional.
+- Firmware 2.5.4 (equipamento real): contagem guardada na memória RTC, zerada às 3 h,
+  relógio pela hora do site (`server_time`) quando o NTP não responde, handshake TLS de 8 s.
+- Site: respostas comprimidas (gzip) e `assets/` com cache de um ano; o painel pede só as
+  leituras novas (`history?since=`) e pausa com a aba oculta; `/devices/me/control` não
+  espera o clima (Open-Meteo é consultada por fora, com 1 min de espera após uma falha).
 - Auditoria somente leitura encontrou 3 Samsung AR24BVFAAWKNAZ em produção e 1 em teste.
   `SAMSUNG_AC` está registrado como candidato por família, sem confirmação nesse modelo.
 - Firmware 2.5.1 aplica a configuração mesmo sem mudar a versão do comando do professor;

@@ -1,3 +1,5 @@
+import time
+
 from app.ir_protocols import brand_candidate, lookup
 
 
@@ -244,12 +246,17 @@ def test_admin_can_resend_protocol_without_changing_ac_command(context):
             "model": "AR24BVFAAWKNAZ",
         },
     )
-    before = client.get("/devices/me/control", headers=context["device_headers"]).json()
+
+    def device_view():
+        body = client.get("/devices/me/control", headers=context["device_headers"]).json()
+        assert abs(body.pop("server_time") - time.time()) < 60
+        return body
+
+    before = device_view()
     for revision in (1, 2):
         result = client.post(path, headers=headers)
         assert result.status_code == 200
         assert result.json()["revision"] == revision
         assert result.json()["protocols"] == "SAMSUNG_AC:1"
         assert result.json()["candidates"] == 1
-        after = client.get("/devices/me/control", headers=context["device_headers"]).json()
-        assert after == {**before, "ir_revision": revision}
+        assert device_view() == {**before, "ir_revision": revision}

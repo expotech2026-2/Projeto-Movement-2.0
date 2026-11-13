@@ -47,6 +47,12 @@ Equações lógicas, tabela de estados, contador e circuito do Logisim estão em
 
 ## Firmware
 
+O firmware 2.6.0 também permite selecionar o emissor do POCO F7 via Tasker e
+Android IR Blaster, pelo site ou monitor serial. As configurações de emissor e
+endereço chegam junto do controle, sem alterar sua versão. O caminho legado
+continua usando o LED. Veja [Xiaomi IR](../docs/xiaomi-ir.md) para a preparação
+obrigatória, limitações e testes físicos ainda pendentes.
+
 - Fica em `firmware/climacontrol/sketch.ino` (Arduino C++). As bibliotecas externas são a do DHT e a IRremoteESP8266.
 - As configurações privadas ficam em `config.h`, fora do Git e copiado de `config.h.example`: URL da API, token do dispositivo, certificado CA, rede Wi-Fi, tipo do DHT e protocolo IR.
 - Sem `MOVEMENT_DHT_TYPE DHT11` no `config.h`, o firmware usa DHT22, que é o modelo do Wokwi.

@@ -98,3 +98,34 @@ def test_openweathermap_is_used_only_with_a_key():
         "OpenMeteoWeather",
         "OpenWeatherMapWeather",
     ]
+
+
+def test_failed_sources_are_not_asked_again_for_a_minute(monkeypatch):
+    apis = FakeApis(down={"open-meteo", "openweather"})
+    monkeypatch.setattr(module.httpx, "get", apis)
+    climate = OpenMeteoClimate(backups=[OpenWeatherMapWeather("chave-de-teste")])
+    assert climate.outside(-22.9056, -47.0608) is None
+    assert climate.outside(-22.9056, -47.0608) is None
+    assert len(apis.calls) == 2
+    key = (-22.906, -47.061)
+    climate._failed[key] -= module.RETRY_SECONDS + 1
+    assert climate.outside(-22.9056, -47.0608) is None
+    assert len(apis.calls) == 4
+
+
+def test_device_never_waits_for_the_weather(monkeypatch):
+    apis = FakeApis()
+    monkeypatch.setattr(module.httpx, "get", apis)
+    pending = []
+    climate = OpenMeteoClimate(background=pending.append)
+    assert climate.outside_cached(-22.9056, -47.0608) is None
+    assert climate.outside_cached(-22.9056, -47.0608) is None
+    assert (len(pending), apis.calls) == (1, [])
+    pending.pop()()
+    assert climate.outside_cached(-22.9056, -47.0608) == Outside(27.4, 61.0, "Open-Meteo")
+    assert (len(pending), len(apis.calls)) == (0, 1)
+    key = (-22.906, -47.061)
+    saved_at, value = climate._cache[key]
+    climate._cache[key] = (saved_at - module.CACHE_SECONDS - 1, value)
+    assert climate.outside_cached(-22.9056, -47.0608) == value
+    assert len(pending) == 1
