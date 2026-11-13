@@ -34,6 +34,7 @@
   --border: rgba(227, 226, 218, 0.14);
   --border-strong: rgba(227, 226, 218, 0.3);
   --cool: #3db8ff;
+  --cool-text: #a8ddff;
   --cool-soft: rgba(61, 184, 255, 0.16);
   --sun: #ffd23f;
   --sun-soft: rgba(255, 210, 63, 0.15);
@@ -94,7 +95,8 @@
   --chart-axis: #55646b;
   --border: rgba(31, 48, 56, 0.14);
   --border-strong: rgba(31, 48, 56, 0.34);
-  --cool: #0b7fd6;
+  --cool: #0a6fbd;
+  --cool-text: #075c9c;
   --cool-soft: #d9ecff;
   --sun: #a36b00;
   --sun-soft: #fff1c9;
@@ -170,6 +172,14 @@ strong {
 }
 .capitalize {
   text-transform: capitalize;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Cabeçalho fixo */
@@ -342,7 +352,7 @@ strong {
 .content {
   max-width: 1376px;
   margin: 0 auto;
-  padding: var(--s-7) var(--gut) 0;
+  padding: var(--s-6) var(--gut) 0;
 }
 .page-heading {
   display: flex;
@@ -372,7 +382,7 @@ footer {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--s-2) var(--s-6);
-  margin-top: var(--s-8);
+  margin-top: var(--s-7);
   padding: var(--s-5) 0 var(--s-6);
   border-top: 1px solid var(--line);
   font-size: 14px;
@@ -611,8 +621,8 @@ input::placeholder {
 }
 .chart-panel,
 .diagnostics-panel {
-  margin: 0 0 var(--s-7);
-  padding: var(--s-6) 0 0;
+  margin: 0 0 var(--s-6);
+  padding: var(--s-5) 0 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -640,7 +650,7 @@ input::placeholder {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--s-3) var(--s-5);
-  margin-bottom: var(--s-6);
+  margin-bottom: var(--s-5);
 }
 .room-selector {
   display: flex;
@@ -685,7 +695,7 @@ input::placeholder {
   margin-bottom: var(--s-6);
 }
 .thermal {
-  margin: auto 0 0;
+  margin: 0;
 }
 .thermal-reading {
   display: flex;
@@ -1165,7 +1175,7 @@ input::placeholder {
 
 /* Unidades e salas */
 .unit-section {
-  margin-bottom: var(--s-7);
+  margin-bottom: var(--s-6);
 }
 .unit-header {
   display: flex;
@@ -1525,44 +1535,14 @@ td .text-button {
 /* Login */
 .operator-login {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
   min-height: 100vh;
 }
-.login-story {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--s-7);
-  padding: var(--s-7) var(--s-8);
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-}
-.login-story h2 {
-  max-width: 14ch;
-  font-size: clamp(40px, 4.6vw, 72px);
-  letter-spacing: -0.045em;
-  line-height: 1.02;
-}
-.login-story p {
-  max-width: 44ch;
-  margin-top: var(--s-5);
-  font-size: 20px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-.login-facts {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.login-facts li {
-  padding: var(--s-3) 0;
-  border-top: 1px solid var(--line);
-}
 .operator-login__main {
+  order: -1;
   display: grid;
   place-items: center;
-  padding: var(--s-6) var(--s-5);
+  padding: var(--s-7) var(--s-5);
 }
 .operator-login__form {
   display: flex;
@@ -1573,7 +1553,11 @@ td .text-button {
   border: 0;
   background: none;
 }
-.operator-login h1 {
+.operator-login__form .brand {
+  margin-bottom: var(--s-7);
+  font-size: 24px;
+}
+.operator-login h2 {
   font-size: 32px;
 }
 .operator-login__form > p {
@@ -1593,10 +1577,100 @@ td .text-button {
   margin-top: var(--s-5);
   border: 0;
 }
-.operator-login [role="alert"] {
+.operator-login__form > [role="alert"] {
   margin: var(--s-2) 0 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
   font-size: 15px;
-  color: var(--danger);
+  color: var(--text);
+}
+.login-story {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-6);
+  padding: var(--s-7) var(--s-8);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+.login-story h1 {
+  max-width: 16ch;
+  font-size: clamp(32px, 3.6vw, 56px);
+  letter-spacing: -0.04em;
+  line-height: 1.04;
+}
+.login-story > p {
+  max-width: 46ch;
+  margin-top: calc(-1 * var(--s-3));
+  font-size: 18px;
+  color: var(--muted);
+}
+/* Exemplo do painel: a mesma régua da sala, com valores de demonstração */
+.login-demo {
+  --surface: var(--bg);
+  max-width: 560px;
+  padding: var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+.login-demo__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+  font-size: 18px;
+  color: var(--heading);
+}
+.login-demo .thermal-reading strong {
+  font-size: 32px;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.login-demo .thermal-reading strong small {
+  font-size: 16px;
+  vertical-align: 0.6em;
+}
+.login-demo .thermal-scale {
+  margin-top: var(--s-5);
+}
+.login-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  max-width: 560px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.login-facts li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.login-facts svg {
+  box-sizing: content-box;
+  padding: var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--tone-soft);
+  color: var(--tone);
+}
+.login-facts li:nth-child(1) {
+  --tone: var(--sun);
+  --tone-soft: var(--sun-soft);
+}
+.login-facts li:nth-child(2) {
+  --tone: var(--cool);
+  --tone-soft: var(--cool-soft);
+}
+.login-facts li:nth-child(3) {
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
 }
 
 /* Notebook e tablet */
@@ -1661,14 +1735,18 @@ td .text-button {
   .section-heading {
     flex-wrap: wrap;
   }
-  .login-story {
-    padding: var(--s-6) var(--s-5);
-    gap: var(--s-6);
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+  .operator-login__main {
+    padding: var(--s-7) var(--s-5) var(--s-6);
   }
-  .login-facts {
-    display: none;
+  .login-story {
+    justify-content: flex-start;
+    padding: var(--s-6) var(--s-5) var(--s-7);
+    gap: var(--s-5);
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .login-story > p {
+    margin-top: calc(-1 * var(--s-2));
   }
 }
 
@@ -2014,17 +2092,20 @@ td .text-button {
 .report-list li:nth-child(5)::before {
   background: var(--rose);
 }
-.login-story {
-  background: linear-gradient(150deg, #0b6fc0, #008f78 60%, #12b98f);
+.ir-transport {
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--border);
 }
-.login-story .brand,
-.login-story h2,
-.login-story p,
-.login-facts li {
-  color: #ffffff;
+.ir-transport label {
+  display: grid;
+  gap: var(--s-2);
+  flex: 1 1 240px;
 }
-.login-facts li {
-  border-top-color: rgba(255, 255, 255, 0.35);
+.ir-transport input,
+.ir-transport select {
+  width: 100%;
+  min-width: 0;
 }
 @media (max-width: 1150px) {
   .room-state {
@@ -2032,5 +2113,445 @@ td .text-button {
   }
   .readouts .readout:nth-child(n) {
     border: 0;
+  }
+}
+
+/* Painel da sala: leituras dentro do estado da sala, sem vão entre o título e a temperatura */
+.room-state {
+  container-type: inline-size;
+  justify-content: flex-start;
+  gap: var(--s-5);
+}
+.room-state .section-heading {
+  margin-bottom: 0;
+}
+.room-state .readouts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+.room-state .readout {
+  padding: var(--s-4);
+}
+.room-state .readout dt {
+  align-items: flex-start;
+  min-height: 2.9em;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.room-state .readout dt svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.room-state .readout-value {
+  font-size: 30px;
+}
+@container (max-width: 640px) {
+  .room-state .readouts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .room-state .readout dt {
+    min-height: 0;
+  }
+}
+.thermal-reading strong.empty {
+  font-size: 56px;
+  letter-spacing: 0;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.thermal-reading strong.empty small {
+  display: none;
+}
+
+/* A régua e a barra de lotação acompanham cada leitura nova */
+.thermal-track .thermal-inside,
+.thermal-track .thermal-outside,
+.thermal-track .thermal-target {
+  transition: left 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: thermal-slide 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.readout .readout-meter span {
+  transition: width 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  animation: meter-grow 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+@keyframes meter-grow {
+  from {
+    width: 0;
+  }
+}
+
+/* Comando do ar: temperatura com controle deslizante e dois botões lado a lado */
+.control-set {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.control-set .control-manual {
+  display: contents;
+}
+.control-set .control-target {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.control-set .button {
+  width: 100%;
+  padding: 0 var(--s-3);
+}
+.target-slider {
+  flex: 1 1 120px;
+  min-width: 0;
+  height: 44px;
+  margin-left: var(--s-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+}
+.target-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #3db8ff,
+    #19d3a2 45%,
+    #ffd23f 80%,
+    #ff8a3d
+  );
+}
+.target-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    #3db8ff,
+    #19d3a2 45%,
+    #ffd23f 80%,
+    #ff8a3d
+  );
+}
+.target-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -7px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--heading);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  transition: transform 0.12s;
+}
+.target-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  background: var(--heading);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.target-slider:hover::-webkit-slider-thumb,
+.target-slider:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.room-control .ir-transport {
+  margin-bottom: var(--s-5);
+  padding-bottom: var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+.ir-transport h3 {
+  margin-bottom: var(--s-1);
+}
+.ir-transport .control-actions {
+  align-items: flex-end;
+  margin-top: var(--s-3);
+  padding-top: 0;
+  border-top: 0;
+}
+.ir-transport label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.ir-transport .notice {
+  margin: var(--s-3) 0 0;
+}
+
+/* Cartões de sala: as três ações sempre na mesma linha */
+.room-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+}
+.card-actions {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.card-actions button {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.reports-grid > *,
+.overview-bottom > * {
+  min-width: 0;
+}
+.report-scope select {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  th,
+  td {
+    padding: var(--s-3) var(--s-4);
+  }
+}
+
+/* Celular: cada linha de tabela vira um cartão com rótulo e valor */
+@media (max-width: 640px) {
+  .table-wrap table,
+  .table-wrap tbody,
+  .table-wrap tr,
+  .table-wrap td {
+    display: block;
+  }
+  .table-wrap table {
+    white-space: normal;
+  }
+  .table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table-wrap tr {
+    padding: var(--s-4);
+  }
+  .table-wrap tr + tr {
+    border-top: 1px solid var(--line);
+  }
+  .table-wrap td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-4);
+    padding: var(--s-1) 0;
+    border: 0;
+    text-align: right;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    font-size: 14px;
+    text-align: left;
+    color: var(--muted);
+  }
+  .table-wrap td:first-child {
+    display: block;
+    padding-bottom: var(--s-2);
+    font-size: 18px;
+    text-align: left;
+    color: var(--heading);
+  }
+  .table-wrap td:first-child::before,
+  .table-wrap td[data-label="Ações"]::before {
+    display: none;
+  }
+  .table-wrap td[data-label="Ações"] {
+    justify-content: flex-start;
+    padding-top: var(--s-2);
+  }
+}
+@media (max-width: 380px) {
+  .card-actions {
+    flex-wrap: wrap;
+  }
+  .control-set {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 1150px) {
+  .room-deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 380px) {
+  .control-set .control-target {
+    flex-wrap: wrap;
+  }
+}
+
+/* Celular: o comando do ar vem logo depois da temperatura; leituras e explicações ficam abaixo */
+@media (max-width: 640px) {
+  .heading-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-2);
+  }
+  .heading-actions .button {
+    padding: 0 var(--s-2);
+    font-size: 15px;
+  }
+  .heading-actions .button svg {
+    display: none;
+  }
+  .room-deck {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-5);
+    padding: var(--s-5);
+    background:
+      linear-gradient(160deg, var(--cool-soft), transparent 60%), var(--surface);
+  }
+  .room-deck .room-state {
+    display: contents;
+  }
+  .room-deck .room-control {
+    order: 2;
+    padding: var(--s-5) 0 0;
+  }
+  .room-state .readouts {
+    order: 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .room-state .readout dt {
+    min-height: 0;
+  }
+  .room-control .section-heading,
+  .room-control .section-heading > div {
+    display: contents;
+  }
+  .room-control .section-heading h2 {
+    margin-bottom: var(--s-4);
+  }
+  .room-control .section-heading p {
+    order: 9;
+    margin-top: var(--s-5);
+  }
+}
+@media (max-width: 350px) {
+  .heading-actions {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .control-set {
+    grid-template-columns: 1fr;
+  }
+  .control-set .control-target {
+    flex-wrap: wrap;
+  }
+  .control-set .target-slider {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+@media (min-width: 641px) {
+  .heading-actions {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+  }
+}
+@media (max-width: 480px) {
+  .operator-login__form .brand {
+    margin-bottom: var(--s-6);
+  }
+  .login-facts {
+    grid-template-columns: 1fr;
+  }
+  .login-facts li {
+    flex-direction: row;
+    align-items: center;
+  }
+  .login-facts svg {
+    flex-shrink: 0;
+  }
+}
+
+/* Achados do verificador do taste-skill */
+.heading-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+}
+.unit-chip {
+  color: var(--cool-text);
+}
+.brand {
+  min-height: 44px;
+}
+.section-heading p.muted,
+.room-control .control-status {
+  font-size: 16px;
+}
+.readout-value,
+.sampling-metrics strong,
+.retention-card strong {
+  font-size: 30px;
+}
+@media (min-width: 761px) {
+  .header-tools {
+    margin-right: calc(-1 * var(--s-3));
+  }
+}
+@media (max-width: 760px) {
+  .text-button,
+  .card-actions button {
+    min-height: 44px;
+  }
+  .notice > button:not(.button) {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (max-width: 640px) {
+  .room-control .section-heading .heading-line {
+    margin-bottom: var(--s-4);
+  }
+  .room-control .section-heading h2 {
+    margin-bottom: 0;
+  }
+}
+
+.field-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.field-inline select,
+.field-inline input {
+  color: var(--text);
+  font-weight: 400;
+}
+.unit-title h3 {
+  font-size: 20px;
+}
+h2 {
+  font-size: 28px;
+}
+.readout-value,
+.sampling-metrics strong,
+.retention-card strong {
+  font-size: 28px;
+}
+@media (max-width: 640px) {
+  h2 {
+    font-size: 24px;
+  }
+  .readout-value,
+  .sampling-metrics strong,
+  .retention-card strong {
+    font-size: 24px;
+  }
+  .field-inline {
+    width: 100%;
+  }
+  .field-inline select,
+  .field-inline input {
+    flex: 1;
+    min-width: 0;
   }
 }

@@ -100,7 +100,9 @@ let citiesCache = null;
 
 // O IBGE recusa conexões de fora do Brasil e a API roda nos EUA, então o navegador busca direto.
 export function cities() {
-  citiesCache ??= fetch(IBGE_CITIES_URL, { signal: AbortSignal.timeout(15_000) })
+  citiesCache ??= fetch(IBGE_CITIES_URL, {
+    signal: AbortSignal.timeout(15_000),
+  })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`IBGE indisponível (HTTP ${response.status})`);
@@ -145,6 +147,17 @@ export function setRoomControl(roomId, command) {
 export function sendIrProtocol(roomId) {
   return request(`/rooms/${encodeURIComponent(roomId)}/ir-protocol`, {
     method: "POST",
+  });
+}
+
+export function irTransport(roomId) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/ir-transport`);
+}
+
+export function setIrTransport(roomId, configuration) {
+  return request(`/rooms/${encodeURIComponent(roomId)}/ir-transport`, {
+    method: "PUT",
+    body: JSON.stringify(configuration),
   });
 }
 

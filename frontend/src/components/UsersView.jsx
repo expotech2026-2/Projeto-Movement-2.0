@@ -60,9 +60,12 @@ export function UsersView({ currentUser, onNotice }) {
     <>
       <div className="section-heading">
         <div>
-          <h2>
-            Usuários <span className="count">{users?.length ?? "…"}</span>
-          </h2>
+          <div className="heading-line">
+            <h2>Usuários</h2>
+            <span className="count">
+              {users ? `${users.length} cadastrados` : "Carregando…"}
+            </span>
+          </div>
           <p className="muted">
             Professores consultam salas, leituras e relatórios. Administradores
             também alteram cadastros e usuários.
@@ -103,26 +106,26 @@ export function UsersView({ currentUser, onNotice }) {
             <tbody>
               {users.map((user) => (
                 <tr key={user.id}>
-                  <td>
+                  <td data-label="Nome">
                     <strong>{user.full_name}</strong>
                   </td>
-                  <td>{user.username}</td>
-                  <td>
+                  <td data-label="Login">{user.username}</td>
+                  <td data-label="Perfil">
                     <span className={`role-badge role-badge--${user.role}`}>
                       {ROLES[user.role]}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Situação">
                     <span
                       className={`badge ${user.active ? "success" : "warning"}`}
                     >
                       {user.active ? "Ativo" : "Inativo"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Desde">
                     {new Date(user.created_at).toLocaleDateString("pt-BR")}
                   </td>
-                  <td>
+                  <td data-label="Ações">
                     <button
                       className="text-button"
                       onClick={() => setEditing({ type: "user", item: user })}

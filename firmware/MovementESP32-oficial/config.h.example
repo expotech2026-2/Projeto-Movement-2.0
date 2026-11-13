@@ -3,6 +3,10 @@
 #define MOVEMENT_WIFI_SSID "NOME_DA_REDE"
 #define MOVEMENT_WIFI_PASSWORD "SENHA_DA_REDE"
 #define MOVEMENT_DHT_TYPE DHT11
+// Escolha inicial; o site pode alterá-la. Chave do gateway somente neste arquivo privado.
+#define MOVEMENT_IR_TRANSPORT "esp32"
+#define MOVEMENT_XIAOMI_URL ""
+#define MOVEMENT_XIAOMI_KEY ""
 // #define MOVEMENT_DHT_EXTERNO 0            // sem o 2o DHT11 do lado de fora
 // #define MOVEMENT_BARREIRAS_INVERTIDAS 1   // porta livre aparece "A cortada"
 // #define MOVEMENT_HORA_ZERAR 3             // hora (Brasilia) de zerar a contagem; -1 desliga

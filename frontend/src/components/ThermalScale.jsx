@@ -22,7 +22,7 @@ export function ThermalScale({ inside, outside, target, value, detail }) {
     <figure className="thermal">
       <div className="thermal-reading">
         <span>Temperatura interna</span>
-        <strong>
+        <strong className={hasInside ? undefined : "empty"}>
           {value}
           <small>°C</small>
         </strong>

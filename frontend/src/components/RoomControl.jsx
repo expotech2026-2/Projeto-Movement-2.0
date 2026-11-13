@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { acIsOn, missingIrProtocol, powerCommand } from "../services/acPower";
+import { IrTransport } from "./IrTransport";
 
 const MODES = {
   auto: { label: "Automático", tone: "success" },
@@ -75,15 +76,19 @@ export function RoomControl({ state, device, reading, isAdmin }) {
   const message = failure || error;
   const isOn = acIsOn(control, device, reading);
   const targetValid = Number(target) >= 16 && Number(target) <= 30;
+  const usesXiaomi =
+    device?.ac_state?.startsWith("Xiaomi:") ||
+    (state.transport?.revision > 0 && state.transport.transport === "xiaomi");
+  const needsProtocol = !usesXiaomi && missingIrProtocol(device);
 
   return (
     <section className="panel chart-panel room-control">
       <div className="section-heading">
         <div>
-          <h2>
-            Ar-condicionado da sala
+          <div className="heading-line">
+            <h2>Ar-condicionado da sala</h2>
             {mode && <span className={`badge ${mode.tone}`}>{mode.label}</span>}
-          </h2>
+          </div>
           <p className="muted">
             Professores e administradores podem ligar, desligar ou fixar uma
             temperatura. O comando vale por 2 horas. O ESP32 o recebe em até 15
@@ -96,6 +101,14 @@ export function RoomControl({ state, device, reading, isAdmin }) {
         <p className="muted">Carregando o controle…</p>
       ) : (
         <>
+          {state.transport && (
+            <IrTransport
+              key={state.roomId}
+              configuration={state.transport}
+              isAdmin={isAdmin}
+              save={state.saveTransport}
+            />
+          )}
           <div className="power-row">
             <button
               type="button"
@@ -108,15 +121,17 @@ export function RoomControl({ state, device, reading, isAdmin }) {
               {busy ? "Enviando…" : isOn ? "Desligar o ar" : "Ligar o ar"}
             </button>
             <span className="muted">
-              {isOn
-                ? "O ar está ligado."
-                : `O ar está desligado. Ligar fixa ${targetValid ? target : "—"} °C.`}
-              {device?.ac_state && !missingIrProtocol(device)
+              {usesXiaomi
+                ? `Comando atual: ${isOn ? "ligar" : "desligar"}. Confira a resposta física do ar.`
+                : isOn
+                  ? "O ar está ligado."
+                  : `O ar está desligado. Ligar fixa ${targetValid ? target : "—"} °C.`}
+              {device?.ac_state && !needsProtocol
                 ? ` Último estado do ESP32: ${device.ac_state}.`
                 : ""}
             </span>
           </div>
-          {missingIrProtocol(device) && (
+          {needsProtocol && (
             <p className="notice error" role="alert">
               O ESP32 ainda não tem o protocolo infravermelho do aparelho, então
               os comandos não chegam ao ar. Confira o protocolo no cadastro do
@@ -125,7 +140,7 @@ export function RoomControl({ state, device, reading, isAdmin }) {
               cadastro o protocolo que funcionar.
             </p>
           )}
-          {missingIrProtocol(device) && isAdmin && (
+          {needsProtocol && isAdmin && (
             <button
               className="button secondary"
               disabled={protocolBusy}
@@ -136,7 +151,7 @@ export function RoomControl({ state, device, reading, isAdmin }) {
                 : "Enviar protocolo para o ESP32"}
             </button>
           )}
-          {missingIrProtocol(device) && !isAdmin && (
+          {needsProtocol && !isAdmin && (
             <p className="muted">
               Peça a um administrador para enviar o protocolo.
             </p>
@@ -147,20 +162,34 @@ export function RoomControl({ state, device, reading, isAdmin }) {
             </p>
           )}
           {control && <p className="control-status">{describe(control)}</p>}
-          <div className="control-actions">
+          <div className="control-actions control-set">
             <form className="control-manual" onSubmit={fix}>
-              <label htmlFor="control-target">Temperatura</label>
-              <input
-                id="control-target"
-                type="number"
-                min={16}
-                max={30}
-                step={1}
-                required
-                value={target}
-                onChange={(event) => setTarget(event.target.value)}
-              />
-              <span className="muted">°C</span>
+              <div className="control-target">
+                <label htmlFor="control-target" id="control-target-label">
+                  Temperatura
+                </label>
+                <input
+                  id="control-target"
+                  type="number"
+                  min={16}
+                  max={30}
+                  step={1}
+                  required
+                  value={target}
+                  onChange={(event) => setTarget(event.target.value)}
+                />
+                <span className="muted">°C</span>
+                <input
+                  className="target-slider"
+                  type="range"
+                  aria-labelledby="control-target-label"
+                  min={16}
+                  max={30}
+                  step={1}
+                  value={targetValid ? Number(target) : 23}
+                  onChange={(event) => setTarget(event.target.value)}
+                />
+              </div>
               <button className="button primary" disabled={busy}>
                 Fixar temperatura
               </button>

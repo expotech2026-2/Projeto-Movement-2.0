@@ -68,6 +68,9 @@ class DeviceControlOutput(BaseModel):
     ir_revision: int = 0
     # Hora do servidor (segundos desde 1970): acerta o relógio do ESP32 onde o NTP é bloqueado.
     server_time: int = 0
+    ir_transport: str = "esp32"
+    ir_gateway_url: str = ""
+    ir_transport_revision: int = 0
 
 
 def effective(room: Room, now: datetime) -> tuple[str, int | None, datetime | None]:
@@ -166,6 +169,9 @@ def create_control_router() -> APIRouter:
             ir_pending=sum(not item.ir_protocol for item in appliances),
             ir_revision=room.ir_revision,
             server_time=int(now.timestamp()),
+            ir_transport=room.ir_transport,
+            ir_gateway_url=room.ir_gateway_url,
+            ir_transport_revision=room.ir_transport_revision,
         )
 
     return router
