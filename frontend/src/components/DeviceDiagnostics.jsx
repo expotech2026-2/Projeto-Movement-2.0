@@ -41,7 +41,7 @@ export function DeviceDiagnostics({ device }) {
         <div>
           <h2>Diagnóstico do ESP32</h2>
           <p className="muted">
-            {device.id} · fica offline depois de 2,5 min sem contato
+            {device.id} · fica offline depois de 2,5{" "}min sem contato
           </p>
         </div>
         <StatusBadge device={device} />
