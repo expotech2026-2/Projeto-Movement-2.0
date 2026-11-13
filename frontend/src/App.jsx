@@ -13,6 +13,7 @@ import { OperatorLogin } from "./components/OperatorLogin";
 import { ReportsView } from "./components/ReportsView";
 import { RoomAlerts } from "./components/RoomAlerts";
 import { RoomControl } from "./components/RoomControl";
+import { ThermalScale } from "./components/ThermalScale";
 import { UnitsView } from "./components/UnitsView";
 import { UsersView } from "./components/UsersView";
 import { AC_KINDS, AC_STATUS, ROLES } from "./config/catalog";
@@ -108,20 +109,20 @@ export default function App() {
 
 const HEADINGS = {
   overview: [
-    "Cada ambiente, sob controle.",
-    "Acompanhe as condições e organize a climatização dos seus espaços.",
+    "Painel da sala",
+    "Temperatura, umidade e ocupação ao vivo, e o comando do ar-condicionado.",
   ],
   rooms: [
     "Unidades e salas",
     "Cada unidade com suas salas e o inventário de aparelhos de cada uma.",
   ],
   history: [
-    "O clima ao longo dos meses",
-    "Consulte as médias de cada sala e acompanhe a evolução do ambiente.",
+    "Histórico mensal",
+    "As médias de cada sala mês a mês, para acompanhar a evolução do ambiente.",
   ],
   reports: [
-    "Relatórios",
-    "Gere documentos em PDF de toda a rede, de uma unidade ou de uma sala.",
+    "Relatórios em PDF",
+    "Documentos de toda a rede, de uma unidade ou de uma sala.",
   ],
   users: [
     "Usuários e perfis",
@@ -148,6 +149,7 @@ function Workspace({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [theme, toggleTheme] = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
   const feed = useRoomFeed(roomId, revision);
   const ordered = useMemo(
     () =>
@@ -272,9 +274,9 @@ function Workspace({ user, onLogout }) {
     }
   }
   const navigation = [
-    { id: "overview", icon: "grid", label: "Visão geral" },
-    { id: "rooms", icon: "building", label: "Unidades e salas" },
-    { id: "history", icon: "chart", label: "Histórico mensal" },
+    { id: "overview", icon: "grid", label: "Painel" },
+    { id: "rooms", icon: "building", label: "Salas" },
+    { id: "history", icon: "chart", label: "Histórico" },
     { id: "reports", icon: "file", label: "Relatórios" },
     ...(isAdmin ? [{ id: "users", icon: "people", label: "Usuários" }] : []),
   ];
@@ -284,81 +286,77 @@ function Workspace({ user, onLogout }) {
     setEditing(units.length ? { type: "room" } : { type: "unit" });
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#content">
-        Pular para o conteúdo
-      </a>
-      <aside className="sidebar">
-        <a className="brand" href="#content">
-          <span className="brand-symbol">
-            <img src="/logo.svg" width={42} height={42} alt="" />
-          </span>
-          <span>
-            movement<span className="brand-sub">GESTÃO DE CLIMATIZAÇÃO</span>
-          </span>
-        </a>
-        <div className="nav-label">ESPAÇO DE TRABALHO</div>
-        <nav aria-label="Navegação principal">
-          {navigation.map((item) => (
-            <button
-              key={item.id}
-              aria-current={tab === item.id ? "page" : undefined}
-              className={`nav-item ${tab === item.id ? "active" : ""}`}
-              onClick={() => {
-                setTab(item.id);
-                setNotice("");
-              }}
-            >
-              <Icon name={item.icon} />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <span className="status-dot" /> {units.length}{" "}
-          {units.length === 1 ? "unidade" : "unidades"} · {rooms.length}{" "}
-          {rooms.length === 1 ? "sala" : "salas"}
-          <p>
-            Dados detalhados · 30 dias
-            <br />
-            Médias mensais · 12 meses
-          </p>
-        </div>
-        <button className="nav-item logout" onClick={onLogout}>
-          Sair da conta <span>↗</span>
-        </button>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <span>
-            Ambientes <span className="separator">/</span>{" "}
-            <strong>{navigation.find((item) => item.id === tab).label}</strong>
-          </span>
-          <span className="topbar-actions">
-            <button
-              className="theme-toggle"
-              onClick={toggleTheme}
-              aria-label={
-                theme === "dark" ? "Usar tema claro" : "Usar tema escuro"
-              }
-            >
-              <Icon name={theme === "dark" ? "sun" : "moon"} size={15} />
-              <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>
-            </button>
-            <span className="account">
-              <span className="avatar">{initials(user.full_name)}</span>
-              <span className="account-text">
-                {user.full_name}
-                <small className={`role-badge role-badge--${user.role}`}>
-                  {ROLES[user.role]}
-                </small>
+      <header className="site-header">
+        <div className="header-inner">
+          <a className="skip-link" href="#content">
+            Pular para o conteúdo
+          </a>
+          <a className="brand" href="#content">
+            <img src="/logo.svg" width={32} height={32} alt="" />
+            movement
+          </a>
+          <button
+            className="menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="main-menu"
+            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <Icon name={menuOpen ? "close" : "menu"} />
+          </button>
+          <div
+            id="main-menu"
+            className={`header-menu ${menuOpen ? "open" : ""}`}
+          >
+            <nav aria-label="Navegação principal">
+              {navigation.map((item) => (
+                <button
+                  key={item.id}
+                  aria-current={tab === item.id ? "page" : undefined}
+                  className={`nav-item ${tab === item.id ? "active" : ""}`}
+                  onClick={() => {
+                    setTab(item.id);
+                    setNotice("");
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Icon name={item.icon} size={18} />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <div className="header-tools">
+              <button
+                className="theme-toggle"
+                onClick={toggleTheme}
+                aria-label={
+                  theme === "dark" ? "Usar tema claro" : "Usar tema escuro"
+                }
+              >
+                <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+                <span>{theme === "dark" ? "Tema claro" : "Tema escuro"}</span>
+              </button>
+              <span className="account">
+                <span className="avatar">{initials(user.full_name)}</span>
+                <span className="account-text">
+                  {user.full_name}
+                  <small className={`role-badge role-badge--${user.role}`}>
+                    {ROLES[user.role]}
+                  </small>
+                </span>
               </span>
-            </span>
-          </span>
-        </header>
+              <button className="logout" onClick={onLogout}>
+                <Icon name="logout" size={18} />
+                Sair da conta
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+      <div className="main-shell">
         <main id="content" className="content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">MOVEMENT 2.0</div>
               <h1>{title}</h1>
               <p>{subtitle}</p>
             </div>
@@ -368,10 +366,13 @@ function Workspace({ user, onLogout }) {
                   className="button secondary"
                   onClick={() => setEditing({ type: "unit" })}
                 >
-                  ＋ Nova unidade
+                  <Icon name="plus" size={18} /> Cadastrar unidade
                 </button>
-                <button className="button primary" onClick={newRoom}>
-                  ＋ Nova sala
+                <button
+                  className={`button ${tab === "rooms" ? "primary" : "secondary"}`}
+                  onClick={newRoom}
+                >
+                  <Icon name="plus" size={18} /> Cadastrar sala
                 </button>
               </div>
             )}
@@ -420,11 +421,13 @@ function Workspace({ user, onLogout }) {
                   })}
                 </select>
               </label>
-              <span className="muted">
+              <span className="room-facts">
                 <strong className="unit-chip">{unit?.name}</strong>
-                {room?.location && ` · ${room.location}`}
-                {room && ` · Até ${room.capacity} pessoas`}
-                {room?.computers > 0 && ` · ${room.computers} computadores`}
+                {room?.location && <span>{room.location}</span>}
+                {room && <span>Até {room.capacity} pessoas</span>}
+                {room?.computers > 0 && (
+                  <span>{room.computers} computadores</span>
+                )}
               </span>
             </div>
           )}
@@ -516,8 +519,17 @@ function Workspace({ user, onLogout }) {
             <MonthlyHistory feed={feed} room={room} />
           )}
           <footer>
-            Movement <span>Organização hoje. Ambientes melhores amanhã.</span>
-            <span>Atualização automática a cada 15 s</span>
+            <p>
+              <strong>movement</strong> Organização hoje. Ambientes melhores
+              amanhã.
+            </p>
+            <p>
+              <span className="status-dot" /> {units.length}{" "}
+              {units.length === 1 ? "unidade" : "unidades"}, {rooms.length}{" "}
+              {rooms.length === 1 ? "sala" : "salas"}. Leituras detalhadas por
+              30 dias e médias mensais por 12 meses.
+            </p>
+            <p>Atualização automática a cada 15 s</p>
           </footer>
         </main>
       </div>
@@ -576,7 +588,7 @@ function RoomInventory({
               disabled={feed.loading}
               onClick={onAdd}
             >
-              ＋ Adicionar aparelho
+              <Icon name="plus" size={18} /> Adicionar aparelho
             </button>
           </div>
         )}
@@ -666,17 +678,10 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
   );
   const control = useRoomControl(room?.id, feed.updatedAt);
   const outside = control.control?.outside;
+  const insideDetail = reading
+    ? `Alvo do ar: ${number(reading.target_temp)} °C`
+    : "Aguardando sensor";
   const cards = [
-    {
-      icon: "temp",
-      label: "Temperatura interna",
-      value: number(reading?.temp_inside),
-      unit: "°C",
-      detail: reading
-        ? `Alvo do ar: ${number(reading.target_temp)} °C`
-        : "Aguardando sensor",
-      color: "amber",
-    },
     {
       icon: "sun",
       label: "Temperatura externa",
@@ -687,7 +692,6 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         : control.loading
           ? "Consultando o clima…"
           : "Cadastre a cidade da unidade",
-      color: "amber",
     },
     {
       icon: "drop",
@@ -699,7 +703,6 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         : reading
           ? `Externa: ${number(reading.humidity_outside)}%`
           : "Aguardando sensor",
-      color: "blue",
     },
     {
       icon: "people",
@@ -707,7 +710,10 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       value: number(reading?.occupancy, 0),
       unit: "pessoas",
       detail: `Capacidade da sala: ${room?.capacity || "—"}`,
-      color: "violet",
+      meter:
+        reading && room?.capacity
+          ? Math.min(100, (100 * reading.occupancy) / room.capacity)
+          : 0,
     },
     {
       icon: "snow",
@@ -715,54 +721,67 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
       value: feed.loading ? "—" : feed.appliances.length,
       unit: "unidades",
       detail: `${feed.appliances.filter((item) => item.status === "manutencao").length} em manutenção`,
-      color: "teal",
     },
   ];
   return (
     <>
-      <div className="section-heading">
-        <h2>
-          {room?.name}
-          <span className="unit-chip">{unit?.name}</span>
-          {feed.loading || feed.error ? (
-            <span className="badge warning">
-              {feed.loading ? "Carregando" : "Sem conexão com a API"}
+      <div className="room-deck">
+        <section className="room-state">
+          <div className="section-heading">
+            <h2>
+              {room?.name}
+              <span className="unit-chip">{unit?.name}</span>
+              {feed.loading || feed.error ? (
+                <span className="badge warning">
+                  {feed.loading ? "Carregando" : "Sem conexão com a API"}
+                </span>
+              ) : (
+                <StatusBadge device={feed.devices[0]} />
+              )}
+            </h2>
+            <span className="muted">
+              {reading
+                ? `Última leitura: ${new Date(reading.measured_at).toLocaleString("pt-BR")}`
+                : "Aguardando primeira medição"}
             </span>
-          ) : (
-            <StatusBadge device={feed.devices[0]} />
-          )}
-        </h2>
-        <span className="muted">
-          {reading
-            ? `Última leitura: ${new Date(reading.measured_at).toLocaleString("pt-BR")}`
-            : "Aguardando primeira medição"}
-        </span>
+          </div>
+          <ThermalScale
+            inside={reading?.temp_inside}
+            outside={outside?.temperature}
+            target={reading?.target_temp}
+            value={number(reading?.temp_inside)}
+            detail={insideDetail}
+          />
+        </section>
+        {room?.id && (
+          <RoomControl
+            key={room?.id}
+            isAdmin={isAdmin}
+            state={control}
+            device={feed.devices[0]}
+            reading={feed.latest?.reading}
+          />
+        )}
       </div>
-      <div className="metric-grid">
+      <dl className="readouts">
         {cards.map((card) => (
-          <article className="metric-card" key={card.label}>
-            <div className="metric-top">
-              <span>{card.label}</span>
-              <span className={`metric-icon ${card.color}`}>
-                <Icon name={card.icon} />
-              </span>
-            </div>
-            <div className="metric-value">
+          <div className="readout" key={card.label}>
+            <dt>
+              <Icon name={card.icon} size={18} />
+              {card.label}
+            </dt>
+            <dd className="readout-value">
               {card.value} <small>{card.unit}</small>
-            </div>
-            <p>{card.detail}</p>
-          </article>
+            </dd>
+            {card.meter != null && (
+              <dd className="readout-meter" aria-hidden="true">
+                <span style={{ width: `${card.meter}%` }} />
+              </dd>
+            )}
+            <dd className="readout-detail">{card.detail}</dd>
+          </div>
         ))}
-      </div>
-      {room?.id && (
-        <RoomControl
-          key={room?.id}
-          isAdmin={isAdmin}
-          state={control}
-          device={feed.devices[0]}
-          reading={feed.latest?.reading}
-        />
-      )}
+      </dl>
       <DeviceDiagnostics device={feed.devices[0]} />
       <section className="panel chart-panel">
         <div className="section-heading">
@@ -785,8 +804,8 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
         {points.length ? (
           <>
             <div className="chart-legend">
-              <span>● Interna</span>
-              <span>● Externa</span>
+              <span className="legend-inside">Interna</span>
+              <span className="legend-outside">Externa</span>
             </div>
             <div className="chart">
               <Suspense fallback={<p className="muted">Carregando gráfico…</p>}>
@@ -823,7 +842,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           <div className="section-heading">
             <h2>Inventário da sala</h2>
             <button className="text-button" onClick={onManage}>
-              {isAdmin ? "Gerenciar →" : "Ver inventário →"}
+              {isAdmin ? "Gerenciar aparelhos" : "Ver inventário"}
             </button>
           </div>
           {feed.appliances.length ? (
@@ -854,7 +873,6 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           )}
         </section>
         <section className="retention-card">
-          <span className="eyebrow">HISTÓRICO ORGANIZADO</span>
           <h2>
             Os dados certos,
             <br />

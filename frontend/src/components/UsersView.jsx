@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ROLES } from "../config/catalog";
+import { Icon } from "./Icon";
 import { request } from "../services/movementApi";
 import { ManagementForm } from "./ManagementForms";
 
@@ -71,7 +72,7 @@ export function UsersView({ currentUser, onNotice }) {
           className="button primary"
           onClick={() => setEditing({ type: "user" })}
         >
-          ＋ Novo usuário
+          <Icon name="plus" size={16} /> Novo usuário
         </button>
       </div>
       <div className="notice info">

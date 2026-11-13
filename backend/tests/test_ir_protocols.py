@@ -1,4 +1,16 @@
-from app.ir_protocols import lookup
+from app.ir_protocols import brand_candidate, lookup
+
+
+def test_brand_candidate_only_when_model_is_unknown():
+    assert brand_candidate(" lg ") == {
+        "protocol": "LG2",
+        "ir_model": 2,
+        "confidence": "brand_candidate",
+    }
+    assert brand_candidate("Springer Midea")["protocol"] == "COOLIX"
+    assert brand_candidate("FUJITSU/AIRSTAGE")["protocol"] == "FUJITSU_AC"
+    assert brand_candidate("ELGIN") is None
+    assert brand_candidate("") is None
 
 
 def test_model_lookup_does_not_guess_by_brand():
@@ -79,6 +91,86 @@ def test_unknown_model_remains_pending_and_manual_protocol_is_validated(context)
     )
     manual = client.post(path, headers=headers, json={**payload, "ir_protocol": "GREE"})
     assert manual.json()["ir_source"] == "manual"
+
+
+def test_inmetro_model_gets_brand_candidate_and_reaches_device(context):
+    client, headers = context["client"], context["operator_headers"]
+    path = f"/rooms/{context['room']}/appliances"
+    payload = {
+        "name": "Ar Gree",
+        "kind": "split",
+        "brand": "GREE",
+        "model": "GWC12QC-D3NNB4D",
+        "capacity_btu": 12000,
+    }
+    saved = client.post(path, headers=headers, json=payload).json()
+    assert (saved["ir_protocol"], saved["ir_model"], saved["ir_source"]) == (
+        "GREE",
+        1,
+        "brand_candidate",
+    )
+    control = client.get("/devices/me/control", headers=context["device_headers"]).json()
+    assert (control["ir_protocols"], control["ir_pending"]) == ("GREE:1", 0)
+    unknown = client.post(path, headers=headers, json={**payload, "brand": "ELGIN"}).json()
+    assert (unknown["ir_protocol"], unknown["ir_source"]) == (None, "pending")
+    manual = client.put(
+        f"{path}/{saved['id']}", headers=headers, json={**payload, "ir_protocol": "KELVINATOR"}
+    ).json()
+    assert (manual["ir_protocol"], manual["ir_source"]) == ("KELVINATOR", "manual")
+    resend = client.post(f"/rooms/{context['room']}/ir-protocol", headers=headers).json()
+    assert (resend["protocols"], resend["candidates"]) == ("KELVINATOR:1", 0)
+
+
+def test_migration_fills_brand_candidate_only_for_pending(database_url):
+    from pathlib import Path
+    from uuid import uuid4
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, text
+
+    schema = f"ir_brand_{uuid4().hex}"
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+        connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+        config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        config.attributes["connection"] = connection
+        command.upgrade(config, "0009_appliance_ir")
+        connection.execute(text("INSERT INTO units (id, name) VALUES ('u', 'Unidade')"))
+        connection.execute(text("INSERT INTO rooms (id, name, unit_id) VALUES ('r', 'Sala', 'u')"))
+        rows = [
+            ("pendente", "Springer Midea", None, "pending"),
+            ("manual", "LG", "GREE", "manual"),
+            ("desconhecida", "Elgin", None, "pending"),
+        ]
+        for name, brand, protocol, source in rows:
+            connection.execute(
+                text(
+                    "INSERT INTO air_conditioners (id, room_id, name, kind, brand, model, "
+                    "capacity_btu, inverter, status, ir_protocol, ir_source) VALUES "
+                    "(:id, 'r', :name, 'split', :brand, 'X', 9000, false, 'ativo', "
+                    ":protocol, :source)"
+                ),
+                {
+                    "id": uuid4(),
+                    "name": name,
+                    "brand": brand,
+                    "protocol": protocol,
+                    "source": source,
+                },
+            )
+        query = text("SELECT name, ir_protocol, ir_source FROM air_conditioners ORDER BY name")
+        command.upgrade(config, "0010_ir_brand_candidate")
+        assert connection.execute(query).all() == [
+            ("desconhecida", None, "pending"),
+            ("manual", "GREE", "manual"),
+            ("pendente", "COOLIX", "brand_candidate"),
+        ]
+        command.downgrade(config, "0009_appliance_ir")
+        assert connection.execute(query).all()[2] == ("pendente", None, "pending")
+        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+    engine.dispose()
 
 
 def test_migration_backfills_existing_model(database_url):

@@ -1,4 +1,4 @@
-# Firmware ESP32 2.5.1
+# Firmware ESP32 2.5.3
 
 Esta pasta abre diretamente no Arduino IDE. O arquivo .ino tem o mesmo nome da pasta.
 As duas copias do firmware sao verificadas pelos testes do projeto.
@@ -24,3 +24,9 @@ As duas copias do firmware sao verificadas pelos testes do projeto.
 O botao prepara um reenvio da configuracao; nao liga o ar nem muda o modo do professor.
 O ESP32 confirma seu estado no contato seguinte. O dispositivo precisa receber este
 firmware: um firmware antigo nao passa a interpretar novos campos apenas pelo botao.
+
+O ESP32 guarda o ultimo estado enviado a cada protocolo da sala. A biblioteca IR usa
+esse estado para mandar a mensagem de ligar/desligar (Samsung) e alternar o turbo
+(Midea, Coolix, Fujitsu) so quando muda; depois do IR_TESTE, recomeca de desligado.
+Opcionais no config.h: MOVEMENT_DHT_EXTERNO 0 (sem o DHT de fora),
+MOVEMENT_BARREIRAS_INVERTIDAS 1 (barreira livre aparece cortada) e MOVEMENT_PINO_*.
