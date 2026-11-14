@@ -1,4 +1,7 @@
-# Firmware ESP32 2.6.0
+# Firmware ESP32 2.6.1
+
+O IR_TESTE agora também passa por MIRAGE (Philco) e NEOCLIMA (controles da série ZH,
+como ZH/TT-14 e ZH/TY-01). Alguns controles ZH usam uma variante sem suporte na biblioteca.
 
 Agora é possível escolher entre o LED do ESP32 e o emissor do POCO F7 pelo site
 ou pelos comandos `EMISSOR ESP32` / `EMISSOR XIAOMI` do monitor serial.
