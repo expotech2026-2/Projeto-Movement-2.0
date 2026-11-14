@@ -1,6 +1,13 @@
 # Estado atual
 
-Atualizado em **13/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **14/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+
+## Em desenvolvimento: candidatos Elgin, Agratto, Philco e protocolo NEOCLIMA
+
+- Branch `feat/candidatos-elgin-agratto-philco`, baseada na `Devlop`: Elgin → COOLIX,
+  Agratto → TCL112AC e Philco → MIRAGE (capturas do SmartIR decodificadas, checksums
+  conferidos), migração `0012_ir_more_brands` e NEOCLIMA na escolha manual.
+- Firmware 2.6.1: MIRAGE e NEOCLIMA no `IR_TESTE`. Falta confirmar nos aparelhos reais.
 
 ## Em desenvolvimento: escolha do emissor Xiaomi ou ESP32
 
