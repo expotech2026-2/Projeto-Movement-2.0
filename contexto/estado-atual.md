@@ -1,6 +1,17 @@
 # Estado atual
 
-Atualizado em **13/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+Atualizado em **14/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
+
+## Em desenvolvimento: painéis só com dados reais
+
+- Branch `fix/paineis-dados-reais` (base `Devlop`): o plano de leitura usa só horas com
+  leituras reais (sem perfil padrão inventado) e mostra "Ainda sem dados suficientes";
+  o gráfico de temperatura usa eixo de tempo e deixa lacuna em falta de leitura (> 10 min).
+- 0 °C com 0% de umidade (quadro zerado do DHT11) é recusado em `POST /telemetry` (422)
+  e fica fora do painel, do histórico e do plano; leituras antigas assim seguem no banco.
+- Firmware 2.6.1: descarta o quadro zerado do DHT e só publica depois de ter temperatura
+  externa real (DHT de fora ou Open-Meteo pelo site), sem os 25 °C iniciais.
+- Sem deploy nem gravação da placa; falta o teste manual no Wokwi e na placa.
 
 ## Em desenvolvimento: escolha do emissor Xiaomi ou ESP32
 
