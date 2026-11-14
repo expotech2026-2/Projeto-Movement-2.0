@@ -27,6 +27,7 @@ import {
   regenerateDeviceToken,
   request,
 } from "./services/movementApi";
+import { airTarget } from "./services/airTarget";
 import { chartPoints } from "./services/readings";
 
 const SensorChart = lazy(() => import("./components/SensorChart"));
@@ -664,9 +665,13 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
   );
   const control = useRoomControl(room?.id, feed.updatedAt);
   const outside = control.control?.outside;
-  const insideDetail = reading
-    ? `Alvo do ar: ${number(reading.target_temp)} °C`
-    : "Aguardando sensor";
+  const air = airTarget(reading, control.control);
+  const insideDetail = {
+    manual: `Alvo do ar: ${number(air.target, 0)} °C, fixado pelo professor`,
+    off: "Ar desligado pelo professor",
+    sensor: `Alvo do ar: ${number(air.target)} °C`,
+    none: "Aguardando sensor",
+  }[air.source];
   const cards = [
     {
       icon: "sun",
@@ -734,7 +739,7 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
           <ThermalScale
             inside={reading?.temp_inside}
             outside={outside?.temperature}
-            target={reading?.target_temp}
+            target={air.target}
             value={number(reading?.temp_inside)}
             detail={insideDetail}
           />
