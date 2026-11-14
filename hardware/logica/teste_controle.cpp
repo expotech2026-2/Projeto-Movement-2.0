@@ -67,6 +67,7 @@ unsigned long duracaoManual = 0;
 long versaoControle = -1;
 bool externaDoSite = false;
 float tempExternaAtual = 25.0;
+bool externaConhecida = false;
 float umidExternaAtual = 0.0;
 int capacidadeSala = 0;
 int computadoresSala = -1;
@@ -163,6 +164,13 @@ int main() {
       uaSala != 137.6f || calorFixoSala != 2081.4f || !quadro().empty()) {
     std::printf("FALHA: sala cadastrada: %d pessoas, %d computadores, %.1f W, %.1f W/K, %.1f W\n",
                 capacidadeSala, computadoresSala, potenciaArSala, uaSala, calorFixoSala);
+    falhas++;
+  }
+  // Sem temperatura da cidade, o ESP32 não tem externa real e não publica leituras.
+  if (externaConhecida) falhas++;
+  aplicarControle(String("{\"version\":5,\"temp_outside\":19.4,\"humidity_outside\":71}"));
+  if (!externaConhecida || tempExternaAtual != 19.4f || umidExternaAtual != 71.0f) {
+    std::printf("FALHA: externa do site: %.1f C, %.0f%%\n", tempExternaAtual, umidExternaAtual);
     falhas++;
   }
   aplicarControle(String("{\"version\":5,\"ir_protocols\":\"LG2:2,SAMSUNG_AC:1\"}"));

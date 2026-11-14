@@ -41,7 +41,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.6.0";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.6.1";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 #ifndef MOVEMENT_PINO_BARREIRA_A
@@ -132,7 +132,8 @@ bool  primeiraLeitura = true;
 bool  falhaDhtInterno = false;       // última leitura sem resposta (diagnóstico)
 bool  falhaDhtExterno = false;
 
-float tempExternaAtual = 25.0;
+float tempExternaAtual = 25.0;        // só para o controle; não é enviada antes de uma leitura real
+bool  externaConhecida = false;      // veio do DHT de fora ou do site (Open-Meteo)
 float umidExternaAtual = 0.0;        // umidade relativa externa
 float umidInternaAtual = 0.0;        // umidade relativa interna
 float alvoSalaAtual    = ALVO_SALA_BASE;   // o que os alunos devem sentir
@@ -511,11 +512,17 @@ void lerClima() {
   float tInt = dhtInterno.readTemperature();
   float hExt = MOVEMENT_DHT_EXTERNO ? dhtExterno.readHumidity() : NAN;
   float hInt = dhtInterno.readHumidity();
+  // Quadro todo zerado passa no checksum do DHT11: 0 °C e 0% é falha, não medição.
+  if (tInt == 0 && hInt == 0) tInt = hInt = NAN;
+  if (tExt == 0 && hExt == 0) tExt = hExt = NAN;
   falhaDhtInterno = isnan(tInt) || isnan(hInt);
   falhaDhtExterno = MOVEMENT_DHT_EXTERNO && (isnan(tExt) || isnan(hExt));
 
   // O sensor externo só vale quando o site não tem a temperatura da cidade.
-  if (!isnan(tExt) && !externaDoSite) tempExternaAtual = tExt;
+  if (!isnan(tExt) && !externaDoSite) {
+    tempExternaAtual = tExt;
+    externaConhecida = true;
+  }
   if (!isnan(hExt) && !externaDoSite) umidExternaAtual = hExt;
   if (!isnan(hInt)) umidInternaAtual = hInt;
   if (!isnan(tInt)) {
@@ -597,7 +604,8 @@ void cabecalhosMovement(HTTPClient& http) {
 
 void enviarMovement() {
   if (WiFi.status() != WL_CONNECTED) { WiFi.reconnect(); return; }   // não bloqueia o loop
-  if (primeiraLeitura || String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
+  if (primeiraLeitura || !externaConhecida) return;   // nada de valor inicial inventado
+  if (String(MOVEMENT_DEVICE_TOKEN) == "PREENCHA_LOCALMENTE") return;
   if (movementPendingPayload.isEmpty()) {
     time_t now = time(nullptr);
     if (now < 1700000000) return;
@@ -692,6 +700,7 @@ void aplicarControle(const String& corpo) {
   externaDoSite = tExt.length() > 0;
   if (externaDoSite) {
     tempExternaAtual = tExt.toFloat();
+    externaConhecida = true;
     String hExt = campoJson(corpo, "humidity_outside");
     if (hExt.length() > 0) umidExternaAtual = hExt.toFloat();
   }
