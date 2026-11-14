@@ -23,7 +23,7 @@ from app.ir_transport import create_ir_transport_router
 from app.management import create_management_router
 from app.models import Device
 from app.reports import create_reports_router
-from app.repository import DuplicateConflict, room_exists
+from app.repository import DuplicateConflict, is_sensor_failure, room_exists
 from app.retention import retention_loop
 from app.sampling import create_sampling_router
 from app.schemas import (
@@ -136,6 +136,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         device: Annotated[Device, Depends(require_device)],
         repository: Repository,
     ):
+        if is_sensor_failure(payload):
+            raise HTTPException(
+                422, "Leitura descartada: 0 °C e 0% de umidade indicam falha do sensor da sala"
+            )
         try:
             reading, duplicate = repository.save(device, payload)
         except DuplicateConflict:
