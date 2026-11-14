@@ -797,12 +797,18 @@ function Overview({ feed, room, unit, isAdmin, onManage }) {
             </div>
             <div className="chart">
               <Suspense fallback={<p className="muted">Carregando gráfico…</p>}>
-                <SensorChart points={points} />
+                <SensorChart
+                  points={points}
+                  range={[
+                    feed.updatedAt - Number(period) * 3600000,
+                    feed.updatedAt,
+                  ]}
+                />
               </Suspense>
             </div>
             <p className="chart-note">
-              Até 2.000 leituras mais recentes. Use a API para consultas
-              detalhadas.
+              Até 2.000 leituras mais recentes. Espaços vazios são períodos sem
+              leitura do sensor. Use a API para consultas detalhadas.
             </p>
           </>
         ) : (
