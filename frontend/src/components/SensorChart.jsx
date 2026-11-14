@@ -7,10 +7,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { timeLabel } from "../services/readings";
 
 const axisTick = { fill: "var(--chart-axis)" };
 
-export default function SensorChart({ points }) {
+// Só a leitura isolada por lacunas ganha marcador; as demais já formam a linha.
+function aloneDot({ cx, cy, stroke, payload, index }) {
+  if (!payload.alone || cy == null) return null;
+  return <circle key={index} cx={cx} cy={cy} r={3} fill={stroke} />;
+}
+
+export default function SensorChart({ points, range }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
@@ -23,7 +30,12 @@ export default function SensorChart({ points }) {
           stroke="var(--chart-grid)"
         />
         <XAxis
-          dataKey="time"
+          dataKey="timestamp"
+          type="number"
+          scale="time"
+          domain={range}
+          allowDataOverflow
+          tickFormatter={timeLabel}
           tick={{ ...axisTick, fontSize: 11 }}
           minTickGap={60}
           axisLine={false}
@@ -44,6 +56,7 @@ export default function SensorChart({ points }) {
             color: "var(--text)",
           }}
           labelStyle={{ color: "var(--muted)" }}
+          labelFormatter={timeLabel}
         />
         <Line
           type="monotone"
@@ -51,7 +64,7 @@ export default function SensorChart({ points }) {
           name="Interna (°C)"
           stroke="var(--chart-1)"
           strokeWidth={2.5}
-          dot={false}
+          dot={aloneDot}
         />
         <Line
           type="monotone"
@@ -59,7 +72,7 @@ export default function SensorChart({ points }) {
           name="Externa (°C)"
           stroke="var(--chart-2)"
           strokeWidth={2}
-          dot={false}
+          dot={aloneDot}
         />
       </LineChart>
     </ResponsiveContainer>
