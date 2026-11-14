@@ -506,8 +506,6 @@ function ApplianceFields({ values, update }) {
             "WHIRLPOOL_AC",
             "TCL112AC",
             "KELVINATOR",
-            "MIRAGE",
-            "NEOCLIMA",
           ].map((name) => (
             <option key={name}>{name}</option>
           ))}

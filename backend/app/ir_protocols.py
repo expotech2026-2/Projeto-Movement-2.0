@@ -23,11 +23,6 @@ BRAND_PROTOCOLS = {
     "HITACHI": ("HITACHI_AC", 1),
     "CONSUL": ("WHIRLPOOL_AC", 1),
     "BRASTEMP": ("WHIRLPOOL_AC", 1),
-    # Decodificados de capturas reais do catálogo SmartIR (Elgin HVQI12B2FB, Agratto ECST12FR4-02,
-    # Philco AC); a marca usa outros fabricantes conforme o modelo.
-    "ELGIN": ("COOLIX", 1),
-    "AGRATTO": ("TCL112AC", 1),
-    "PHILCO": ("MIRAGE", 1),
 }
 
 

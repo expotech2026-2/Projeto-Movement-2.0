@@ -90,8 +90,6 @@ class ApplianceInput(BaseModel):
             "WHIRLPOOL_AC",
             "TCL112AC",
             "KELVINATOR",
-            "MIRAGE",
-            "NEOCLIMA",
         ]
         | None
     ) = None

@@ -11,10 +11,7 @@ def test_brand_candidate_only_when_model_is_unknown():
     }
     assert brand_candidate("Springer Midea")["protocol"] == "COOLIX"
     assert brand_candidate("FUJITSU/AIRSTAGE")["protocol"] == "FUJITSU_AC"
-    assert brand_candidate("Elgin")["protocol"] == "COOLIX"
-    assert brand_candidate("AGRATTO")["protocol"] == "TCL112AC"
-    assert brand_candidate("Philco")["protocol"] == "MIRAGE"
-    assert brand_candidate("ELECTROLUX") is None
+    assert brand_candidate("ELGIN") is None
     assert brand_candidate("") is None
 
 
@@ -96,10 +93,6 @@ def test_unknown_model_remains_pending_and_manual_protocol_is_validated(context)
     )
     manual = client.post(path, headers=headers, json={**payload, "ir_protocol": "GREE"})
     assert manual.json()["ir_source"] == "manual"
-    zh = client.post(path, headers=headers, json={**payload, "ir_protocol": "NEOCLIMA"}).json()
-    assert (zh["ir_protocol"], zh["ir_model"], zh["ir_source"]) == ("NEOCLIMA", 1, "manual")
-    control = client.get("/devices/me/control", headers=context["device_headers"]).json()
-    assert "NEOCLIMA:1" in control["ir_protocols"].split(",")
 
 
 def test_inmetro_model_gets_brand_candidate_and_reaches_device(context):
@@ -120,7 +113,7 @@ def test_inmetro_model_gets_brand_candidate_and_reaches_device(context):
     )
     control = client.get("/devices/me/control", headers=context["device_headers"]).json()
     assert (control["ir_protocols"], control["ir_pending"]) == ("GREE:1", 0)
-    unknown = client.post(path, headers=headers, json={**payload, "brand": "ELECTROLUX"}).json()
+    unknown = client.post(path, headers=headers, json={**payload, "brand": "ELGIN"}).json()
     assert (unknown["ir_protocol"], unknown["ir_source"]) == (None, "pending")
     manual = client.put(
         f"{path}/{saved['id']}", headers=headers, json={**payload, "ir_protocol": "KELVINATOR"}
@@ -171,14 +164,6 @@ def test_migration_fills_brand_candidate_only_for_pending(database_url):
             )
         query = text("SELECT name, ir_protocol, ir_source FROM air_conditioners ORDER BY name")
         command.upgrade(config, "0010_ir_brand_candidate")
-        assert connection.execute(query).all() == [
-            ("desconhecida", None, "pending"),
-            ("manual", "GREE", "manual"),
-            ("pendente", "COOLIX", "brand_candidate"),
-        ]
-        command.upgrade(config, "0012_ir_more_brands")
-        assert connection.execute(query).all()[0] == ("desconhecida", "COOLIX", "brand_candidate")
-        command.downgrade(config, "0011_ir_transport")
         assert connection.execute(query).all() == [
             ("desconhecida", None, "pending"),
             ("manual", "GREE", "manual"),
