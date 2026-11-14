@@ -1,12 +1,19 @@
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import and_, not_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models import Device, Room, SensorReading
 from app.schemas import TelemetryInput
+
+# 0 °C com 0% de umidade é o quadro zerado de um DHT com falha, não uma medição.
+VALID_READING = not_(and_(SensorReading.temp_inside == 0, SensorReading.humidity_inside == 0))
+
+
+def is_sensor_failure(payload: TelemetryInput) -> bool:
+    return payload.temp_inside == 0 and payload.humidity_inside == 0
 
 
 class DuplicateConflict(Exception):
@@ -51,6 +58,7 @@ class PostgresTelemetryRepository:
             .where(
                 SensorReading.room_id == room_id,
                 SensorReading.measured_at >= datetime.now(UTC) - timedelta(days=30),
+                VALID_READING,
             )
             .order_by(
                 SensorReading.measured_at.desc(),
@@ -64,6 +72,7 @@ class PostgresTelemetryRepository:
         query = select(SensorReading).where(
             SensorReading.room_id == room_id,
             SensorReading.measured_at >= datetime.now(UTC) - timedelta(days=30),
+            VALID_READING,
         )
         if since is not None:
             query = query.where(SensorReading.measured_at >= since)

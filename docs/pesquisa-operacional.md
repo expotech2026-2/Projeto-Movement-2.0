@@ -27,7 +27,7 @@ WITH ordered AS (
          lag(temp_inside) OVER w AS prev_temp,
          lag(measured_at) OVER w AS prev_at
   FROM sensor_readings
-  WHERE room_id = :room_id
+  WHERE room_id = :room_id AND NOT (temp_inside = 0 AND humidity_inside = 0)
   WINDOW w AS (ORDER BY measured_at)
 )
 SELECT extract(hour FROM measured_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
@@ -37,17 +37,20 @@ SELECT extract(hour FROM measured_at AT TIME ZONE 'America/Sao_Paulo')::int AS h
        ) AS temp_rate
 FROM ordered
 WHERE prev_at IS NOT NULL AND measured_at > prev_at
-GROUP BY 1 ORDER BY 1;
+  AND measured_at - prev_at <= interval '10 minutes'
+GROUP BY 1 HAVING count(*) >= 6 ORDER BY 1;
 ```
 
-**Perfil padrão.** Horas sem histórico usam um perfil de horário de aula:
+Só entram leituras reais: o quadro zerado de um DHT com falha (0 °C e 0% de umidade) fica de fora, pares com mais de 10 minutos entre si (sensor desligado) não estimam variação, e a hora precisa de pelo menos 6 pares.
+
+**Horas sem leituras reais.** Ficam fora do plano: o painel mostra a hora sem barra e não a soma na energia nem no erro, e nela o ESP32 mantém o intervalo fixo de 16 s. Sem nenhuma hora com dados, o painel mostra "Ainda sem dados suficientes" em vez de números. A API informa, hora a hora, se o valor veio do histórico (`history`) ou se falta (`missing`), e quantas horas têm dados (`observed_hours`).
+
+**Perfil de referência (só análise offline).** As seções 5 e 6 usam um perfil hipotético de horário de aula (`default_profile`), que o site não usa:
 
 | Horas | $p_h$ | $r_h$ |
 | --- | --- | --- |
 | 7h–11h, 13h–16h, 19h–21h (aulas) | 0,8 | 0,002 °C/s |
 | Demais | 0 | 0,0005 °C/s |
-
-A API informa, hora a hora, se o valor veio do histórico (`history`) ou do perfil padrão (`default`).
 
 ## 3. Modelo
 
@@ -93,7 +96,7 @@ A solução usa `scipy.optimize.milp`, que chama o solver **HiGHS**. Ele aplica 
 
 Com 144 variáveis, a solução sai em milissegundos.
 
-## 5. Resultado com o perfil padrão e orçamento de 50%
+## 5. Resultado com o perfil de referência e orçamento de 50%
 
 Com $e = 0{,}32$ J e $E_{max} = 0{,}5 \times 1\,728 = 864$ J:
 
@@ -107,7 +110,7 @@ Com $e = 0{,}32$ J e $E_{max} = 0{,}5 \times 1\,728 = 864$ J:
 
 ## 6. Análise de sensibilidade
 
-Saída de `python backend/scripts/sensibilidade.py` (perfil padrão, $e = 0{,}32$ J):
+Saída de `python backend/scripts/sensibilidade.py` (perfil de referência, $e = 0{,}32$ J):
 
 | Orçamento (% da energia atual) | Energia (J/dia) | Economia (%) | Erro esperado (°C) |
 | --- | --- | --- | --- |
@@ -137,14 +140,14 @@ O padrão do sistema é 50% (`MOVEMENT_SAMPLING_BUDGET_RATIO=0.5`), que economiz
 | API | `backend/app/sampling.py`: `GET /rooms/{id}/sampling-plan?budget_ratio=` (painel) e `GET /devices/me/sampling-interval` (ESP32, autenticado pelo token do dispositivo) |
 | Painel | `frontend/src/components/SamplingPlan.jsx`: seletor de orçamento, energia otimizada × fixa, economia, erro e gráfico do intervalo por hora |
 | Firmware | `atualizarIntervalo()` em `firmware/climacontrol/sketch.ino`: consulta o intervalo da hora atual na partida e a cada 15 minutos e o aplica entre 15 e 300 s |
-| Testes | `backend/tests/test_optimization.py` (7 testes do modelo, sem banco) e `backend/tests/test_sampling.py` (7 testes de API) |
+| Testes | `backend/tests/test_optimization.py` (7 testes do modelo, sem banco) e `backend/tests/test_sampling.py` (11 testes de API) |
 | Sensibilidade | `backend/scripts/sensibilidade.py` |
 
-O firmware consulta o plano a cada 15 minutos, e não a cada hora: o intervalo muda na virada da hora, e uma consulta horária poderia manter o intervalo da madrugada (300 s) por até uma hora depois do início das aulas. São 96 consultas por dia (≈ 31 J, 3,6% do orçamento de 864 J), e o atraso máximo cai para 15 minutos. Se a API não responder, o ESP32 mantém o último intervalo recebido. A rota do dispositivo usa a política fixa de 16 s se o orçamento configurado for inviável.
+O firmware consulta o plano a cada 15 minutos, e não a cada hora: o intervalo muda na virada da hora, e uma consulta horária poderia manter o intervalo da madrugada (300 s) por até uma hora depois do início das aulas. São 96 consultas por dia (≈ 31 J, 3,6% do orçamento de 864 J), e o atraso máximo cai para 15 minutos. Se a API não responder, o ESP32 mantém o último intervalo recebido. A rota do dispositivo usa a política fixa de 16 s se o orçamento configurado for inviável ou se a hora atual não tiver leituras reais.
 
 ## 8. Limitações
 
 - A energia por envio é estimada; o valor medido no Wokwi ou na placa deve substituir os 0,32 J (`MOVEMENT_ENERGY_PER_SEND_J`).
-- Com pouco histórico, o plano usa o perfil padrão de horário de aula, que pode não refletir a sala real. Ele melhora sozinho à medida que as leituras chegam.
+- Com pouco histórico, o plano cobre só as horas que já têm leituras reais; as demais ficam em 16 s até o sensor enviar dados nelas.
 - $r_h$ é um percentil das variações observadas, não um limite garantido; picos raros (porta aberta, A/C ligando) podem passar dele.
 - O modelo decide por hora; mudanças de ocupação dentro da hora não são antecipadas.
