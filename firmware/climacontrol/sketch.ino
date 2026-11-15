@@ -41,7 +41,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.6.1";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.6.2";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 #ifndef MOVEMENT_PINO_BARREIRA_A
