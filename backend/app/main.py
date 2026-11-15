@@ -38,7 +38,7 @@ from app.schemas import (
 from app.settings import Settings, get_settings
 from app.users import create_users_router
 
-SCHEMA_VERSION = "0011_ir_transport"
+SCHEMA_VERSION = "0012_ir_more_brands"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

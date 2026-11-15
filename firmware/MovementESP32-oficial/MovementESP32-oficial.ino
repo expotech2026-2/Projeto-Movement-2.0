@@ -41,7 +41,7 @@
 #endif
 
 String movementPendingPayload;
-const char* VERSAO_FIRMWARE = "2.6.1";   // aparece no diagnóstico do site
+const char* VERSAO_FIRMWARE = "2.6.2";   // aparece no diagnóstico do site
 
 // ── Pinos ──────────────────────────────────────────────────────────────────
 #ifndef MOVEMENT_PINO_BARREIRA_A
@@ -201,7 +201,8 @@ const decode_type_t PROTOCOLOS_TESTE[] = {
   decode_type_t::MIDEA,        decode_type_t::COOLIX,       decode_type_t::GREE,
   decode_type_t::KELVINATOR,   decode_type_t::TCL112AC,     decode_type_t::WHIRLPOOL_AC,
   decode_type_t::DAIKIN,       decode_type_t::FUJITSU_AC,   decode_type_t::HITACHI_AC,
-  decode_type_t::ELECTRA_AC,   decode_type_t::CARRIER_AC64,
+  decode_type_t::ELECTRA_AC,   decode_type_t::CARRIER_AC64, decode_type_t::MIRAGE,
+  decode_type_t::NEOCLIMA,
 };
 
 // ════════════════════════════════════════════════════════════════════════════

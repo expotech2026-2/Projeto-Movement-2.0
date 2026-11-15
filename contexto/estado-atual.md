@@ -2,6 +2,14 @@
 
 Atualizado em **14/11/2026**. Atualize este arquivo e a data ao terminar uma tarefa que mude o que está aqui.
 
+## Em desenvolvimento: candidatos Elgin, Agratto, Philco e protocolo NEOCLIMA
+
+- Branch `feat/candidatos-elgin-agratto-philco`, baseada na `Devlop`: Elgin → COOLIX,
+  Agratto → TCL112AC e Philco → MIRAGE (capturas do SmartIR decodificadas, checksums
+  conferidos), migração `0012_ir_more_brands`, NEOCLIMA na escolha manual e alvo
+  do ar do painel acompanhando a temperatura fixada.
+- Firmware 2.6.2: MIRAGE e NEOCLIMA no `IR_TESTE`. Falta confirmar nos aparelhos reais.
+
 ## Em desenvolvimento: painéis só com dados reais
 
 - Branch `fix/paineis-dados-reais` (base `Devlop`): o plano de leitura usa só horas com
