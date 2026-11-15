@@ -88,7 +88,11 @@ Para escolher o protocolo:
 | Fujitsu | `FUJITSU_AC` |
 | Hitachi | `HITACHI_AC` |
 | Consul (Whirlpool) | `WHIRLPOOL_AC`; se não responder, `IR_TESTE` |
-| Electrolux, Elgin, Philco, Agratto | Fabricados por terceiros, variam por modelo: `IR_TESTE` |
+| Elgin | `COOLIX` (capturas do catálogo SmartIR) |
+| Agratto | `TCL112AC` (capturas do catálogo SmartIR) |
+| Philco | `MIRAGE` (uma única captura no SmartIR; confiança baixa) |
+| Controles da série ZH (Chigo, Zanussi, Neoclima) | `NEOCLIMA`; alguns ZH usam uma variante sem suporte |
+| Electrolux | Fabricado por terceiros, varia por modelo: `IR_TESTE` |
 
 - A tabela é um ponto de partida. O protocolo só se confirma no aparelho, porque a mesma marca usa fabricantes diferentes conforme o modelo.
 - O LED precisa estar de frente para o receptor do aparelho, a poucos metros.

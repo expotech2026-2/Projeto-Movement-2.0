@@ -13,6 +13,13 @@ Atualizado em **14/11/2026**. Atualize este arquivo e a data ao terminar uma tar
   externa real (DHT de fora ou Open-Meteo pelo site), sem os 25 °C iniciais.
 - Sem deploy nem gravação da placa; falta o teste manual no Wokwi e na placa.
 
+## Em desenvolvimento: candidatos Elgin, Agratto, Philco e protocolo NEOCLIMA
+
+- Branch `feat/candidatos-elgin-agratto-philco`, baseada na `Devlop`: Elgin → COOLIX,
+  Agratto → TCL112AC e Philco → MIRAGE (capturas do SmartIR decodificadas, checksums
+  conferidos), migração `0012_ir_more_brands` e NEOCLIMA na escolha manual.
+- Firmware 2.6.1: MIRAGE e NEOCLIMA no `IR_TESTE`. Falta confirmar nos aparelhos reais.
+
 ## Em desenvolvimento: escolha do emissor Xiaomi ou ESP32
 
 - Branch `feat/xiaomi-ir-gateway`, baseada em `perf/otimizar-site-e-firmware`
