@@ -160,3 +160,44 @@ def test_health_limits_unknown_room_and_cache(context):
         == 422
     )
     assert client.get("/health").headers["cache-control"] == "no-store"
+
+
+def test_zeroed_dht_frame_is_rejected(context):
+    payload = sample(temp_inside=0.0, humidity_inside=0.0)
+    response = publish(context, payload)
+    assert response.status_code == 422
+    assert "falha do sensor" in response.json()["detail"]
+    with context["app"].state.sessions() as session:
+        stored = select(func.count()).where(SensorReading.message_id == payload["message_id"])
+        assert session.scalar(stored) == 0
+    assert publish(context, sample(temp_inside=0.0, humidity_inside=40.0)).status_code == 201
+
+
+def test_stored_sensor_failure_is_left_out_of_latest_and_history(context):
+    now = datetime.now(UTC)
+    good = publish(context, sample(measured_at=(now - timedelta(minutes=2)).isoformat()))
+    assert good.status_code == 201
+    with context["app"].state.sessions() as session:
+        session.add(
+            SensorReading(
+                message_id=uuid4(),
+                device_id=context["device"],
+                room_id=context["room"],
+                measured_at=now - timedelta(minutes=1),
+                received_at=now,
+                occupancy=3,
+                temp_inside=0.0,
+                temp_outside=19.0,
+                target_temp=21.0,
+                humidity_inside=0.0,
+                humidity_outside=60.0,
+                ac_on=False,
+                manual_mode=True,
+            )
+        )
+        session.commit()
+    client, headers = context["client"], context["operator_headers"]
+    latest = client.get(f"/rooms/{context['room']}/latest", headers=headers).json()
+    assert latest["reading"]["id"] == good.json()["reading"]["id"]
+    history = client.get(f"/rooms/{context['room']}/history", headers=headers).json()
+    assert [reading["id"] for reading in history] == [good.json()["reading"]["id"]]

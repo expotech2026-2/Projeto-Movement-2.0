@@ -34,13 +34,44 @@ const TIME_LABEL = new Intl.DateTimeFormat("pt-BR", {
   minute: "2-digit",
 });
 
-// Leituras das últimas `hours` horas, com o rótulo de data e hora usado nos gráficos.
-export function chartPoints(history, now, hours) {
+// O ESP32 envia a cada 15 a 300 s; um intervalo maior que este é falta de leitura.
+export const GAP_MS = 10 * 60 * 1000;
+
+export function timeLabel(timestamp) {
+  return TIME_LABEL.format(new Date(timestamp));
+}
+
+// 0 °C com 0% de umidade é o quadro zerado de um DHT com falha, não uma medição.
+export function isSensorFailure(reading) {
+  return reading.temp_inside === 0 && reading.humidity_inside === 0;
+}
+
+// Leituras das últimas `hours` horas no eixo de tempo; períodos sem leitura viram lacuna.
+export function chartPoints(history, now, hours, gapMs = GAP_MS) {
   const from = now - hours * 3600000;
-  return history
-    .filter((item) => measuredAt(item) >= from)
-    .map((item) => ({
-      ...item,
-      time: TIME_LABEL.format(new Date(item.measured_at)),
-    }));
+  const points = [];
+  for (const item of history) {
+    const timestamp = measuredAt(item);
+    if (!(timestamp >= from) || isSensorFailure(item)) continue;
+    const previous = points[points.length - 1];
+    if (previous && timestamp - previous.timestamp > gapMs) {
+      points.push({
+        timestamp: (previous.timestamp + timestamp) / 2,
+        gap: true,
+        temp_inside: null,
+        temp_outside: null,
+      });
+    }
+    points.push({ ...item, timestamp });
+  }
+  // Leitura sem vizinhas próximas não forma linha; o gráfico a desenha como ponto.
+  const isReading = (point) => Boolean(point) && !point.gap;
+  return points.map((point, index) =>
+    point.gap
+      ? point
+      : {
+          ...point,
+          alone: !isReading(points[index - 1]) && !isReading(points[index + 1]),
+        },
+  );
 }

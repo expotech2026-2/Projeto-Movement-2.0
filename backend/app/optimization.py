@@ -14,15 +14,19 @@ LOCAL_TZ = "America/Sao_Paulo"
 DEFAULT_OCCUPIED_HOURS = frozenset({7, 8, 9, 10, 11, 13, 14, 15, 16, 19, 20, 21})
 SECONDS_PER_HOUR = 3600
 INFEASIBLE_MESSAGE = "Orçamento insuficiente para manter leituras frescas nas horas ocupadas"
+# Uma hora só entra no plano com pares suficientes de leituras reais e próximas.
+MIN_PAIRS_PER_HOUR = 6
+MAX_PAIR_GAP_SECONDS = 600
 
 # Cada par de leituras consecutivas conta na hora (São Paulo) da segunda leitura.
+# Leituras com 0 °C e 0% de umidade são o quadro zerado de um DHT com falha e ficam de fora.
 HOURLY_PROFILE = text("""
     WITH ordered AS (
         SELECT measured_at, occupancy, temp_inside,
                lag(temp_inside) OVER w AS prev_temp,
                lag(measured_at) OVER w AS prev_at
         FROM sensor_readings
-        WHERE room_id = :room_id
+        WHERE room_id = :room_id AND NOT (temp_inside = 0 AND humidity_inside = 0)
         WINDOW w AS (ORDER BY measured_at)
     )
     SELECT extract(hour FROM measured_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
@@ -32,7 +36,9 @@ HOURLY_PROFILE = text("""
            ) AS temp_rate
     FROM ordered
     WHERE prev_at IS NOT NULL AND measured_at > prev_at
+      AND measured_at - prev_at <= make_interval(secs => :max_gap)
     GROUP BY 1
+    HAVING count(*) >= :min_pairs
     ORDER BY 1
 """)
 
@@ -57,6 +63,7 @@ class SamplingPlan:
 
 
 def default_profile() -> list[HourProfile]:
+    """Perfil hipotético de horário de aula, só para a análise offline e os testes do modelo."""
     return [
         HourProfile(hour, 0.8, 0.002, "default")
         if hour in DEFAULT_OCCUPIED_HOURS
@@ -109,11 +116,14 @@ def plan_sampling(
 
 
 def hourly_profile(session: Session, room_id: str) -> list[HourProfile]:
-    observed = {
-        row.hour: HourProfile(row.hour, float(row.occupancy), float(row.temp_rate), "history")
-        for row in session.execute(HOURLY_PROFILE, {"room_id": room_id})
-    }
-    return [observed.get(hour.hour, hour) for hour in default_profile()]
+    """Horas com leituras reais suficientes da sala; as demais não aparecem."""
+    rows = session.execute(
+        HOURLY_PROFILE,
+        {"room_id": room_id, "max_gap": MAX_PAIR_GAP_SECONDS, "min_pairs": MIN_PAIRS_PER_HOUR},
+    )
+    return [
+        HourProfile(row.hour, float(row.occupancy), float(row.temp_rate), "history") for row in rows
+    ]
 
 
 class IntervalPolicy(Protocol):

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chartPoints, historySince, mergeReadings } from "./readings";
+import {
+  chartPoints,
+  historySince,
+  isSensorFailure,
+  mergeReadings,
+  timeLabel,
+} from "./readings";
 
 const reading = (id, measured_at, temp_inside = 24) => ({
   id,
@@ -58,7 +64,8 @@ describe("histórico incremental", () => {
       6,
     );
     expect(points.map((item) => item.id)).toEqual(["nova"]);
-    expect(points[0].time).toBe(
+    expect(points[0].timestamp).toBe(Date.parse("2026-11-13T14:00:00Z"));
+    expect(timeLabel(points[0].timestamp)).toBe(
       new Date("2026-11-13T14:00:00Z").toLocaleString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
@@ -66,5 +73,52 @@ describe("histórico incremental", () => {
         minute: "2-digit",
       }),
     );
+  });
+
+  it("abre uma lacuna quando o sensor fica mais de dez minutos sem enviar", () => {
+    const now = Date.parse("2026-11-13T15:00:00Z");
+    const points = chartPoints(
+      [
+        reading("a", "2026-11-13T14:00:00Z", 25),
+        reading("b", "2026-11-13T14:05:00Z", 25.2),
+        reading("c", "2026-11-13T14:40:00Z", 26),
+      ],
+      now,
+      6,
+    );
+    expect(points.map((item) => item.id ?? "lacuna")).toEqual([
+      "a",
+      "b",
+      "lacuna",
+      "c",
+    ]);
+    expect(points[2].temp_inside).toBeNull();
+    expect(points[2].temp_outside).toBeNull();
+    expect(points.map((item) => item.alone)).toEqual([
+      false,
+      false,
+      undefined,
+      true,
+    ]);
+  });
+
+  it("não desenha a leitura zerada de um DHT com falha", () => {
+    const now = Date.parse("2026-11-13T15:00:00Z");
+    const failure = {
+      ...reading("falha", "2026-11-13T14:00:15Z", 0),
+      humidity_inside: 0,
+    };
+    const cold = {
+      ...reading("fria", "2026-11-13T14:00:30Z", 0),
+      humidity_inside: 40,
+    };
+    expect(isSensorFailure(failure)).toBe(true);
+    expect(isSensorFailure(cold)).toBe(false);
+    const points = chartPoints(
+      [reading("a", "2026-11-13T14:00:00Z"), failure, cold],
+      now,
+      6,
+    );
+    expect(points.map((item) => item.id)).toEqual(["a", "fria"]);
   });
 });

@@ -1,6 +1,7 @@
-# Firmware ESP32 2.6.1
+# Firmware ESP32 2.6.2
 
-O IR_TESTE agora também passa por MIRAGE (Philco) e NEOCLIMA (controles da série ZH,
+A 2.6.1 descarta o quadro zerado do DHT11 e só publica com temperatura externa real.
+A 2.6.2 faz o IR_TESTE passar também por MIRAGE (Philco) e NEOCLIMA (controles da série ZH,
 como ZH/TT-14 e ZH/TY-01). Alguns controles ZH usam uma variante sem suporte na biblioteca.
 
 Agora é possível escolher entre o LED do ESP32 e o emissor do POCO F7 pelo site
